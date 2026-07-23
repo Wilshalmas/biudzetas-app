@@ -1,0 +1,36 @@
+KAIP EKSPORTUOTI SENUS DUOMENIS IS DABARTINES (GitHub Pages) BIUDZETO KNYGOS
+=============================================================================
+
+Sis failas skirtas TIK instrukcijai - jo niekur kelti nereikia.
+Senos programeles failu VISAI NELIESIME, sitas budas nieko nekeicia joje.
+
+ZINGSNIAI:
+
+1. Atsidaryk savo DABARTINE Biudzeto knyga naršykleje (ta pati, kuria naudojiesi dabar).
+
+2. Atidaryk naršykles Developer Tools:
+   - Chrome/Edge: paspausk F12, arba desiniu pelės mygtuku -> "Inspect" -> "Console"
+   - Safari: reikia isjungti Developer meniu nustatymuose, tada Cmd+Option+C
+
+3. Console skiltyje ikliuok si scenariju IR paspausk Enter:
+
+(async () => {
+  const data = await idbGetAll();
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type: "application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "biudzetas-eksportas.json";
+  a.click();
+})();
+
+4. Naršykle turetu automatiskai atsisiusti faila "biudzetas-eksportas.json".
+
+5. Šita faila (nekeiciant) ikelsi i NAUJA programele (biudzetas.smalllabs.lt),
+   prisijungimo ekrane, skiltyje "Turiu senu duomenu is ankstesnes programeles versijos".
+
+SVARBU:
+- Sis scenarijus tik SKAITO duomenis is tavo naršykles, nieko neistrina ir nekeicia.
+- Senoji programele lieka visiskai nepaliesta, kaip ir norejai.
+- Gali sita eksporta padaryti kelis kartus, jei reikes - kiekviena karta gausi
+  naujausia duomenu kopija.
