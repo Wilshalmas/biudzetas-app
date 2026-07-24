@@ -184,7 +184,6 @@ document.getElementById("auth-login-btn").addEventListener("click", async () => 
 document.getElementById("auth-register-btn").addEventListener("click", async () => {
   const rezultatas = await authUzklausa("/api/register");
   if (rezultatas) {
-    // registracija sekminga - iskart prisijungiame, kad gautume sesijos slapuka
     const prisijungta = await authUzklausa("/api/login");
     if (prisijungta) pradetiApp();
   }
@@ -220,9 +219,7 @@ async function patikrintiArPrisijunges() {
     if (res.ok) {
       pradetiApp();
     }
-    // jei ne ok (401) - tiesiog liekame ant prisijungimo ekrano
   } catch (_) {
-    // tinklo klaida - liekame ant prisijungimo ekrano
   }
 }
 patikrintiArPrisijunges();
@@ -246,6 +243,7 @@ const ICONS = {
   lock: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
   rules: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
   finance: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></svg>',
+  family: '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
 };
 
 const DEFAULT_CATEGORIES = ["Maistas","Transportas","Namai / Sąskaitos","Pramogos","Sveikata","Drabužiai","Kita"];
@@ -411,10 +409,6 @@ const STARTER_MERCHANTS = [
   { keywords: ["HOME4YOU"], category: "Namai / Sąskaitos" },
 ];
 
-// --- Storage: IndexedDB-backed (falls back to localStorage if IndexedDB unavailable) ---
-// load() stays synchronous and only returns the fallback — real persisted values are
-// applied to `state` asynchronously at startup via loadAllFromIDB(), after which every
-// subsequent save() writes straight to IndexedDB in the background.
 const DB_NAME = "biudzetasDB", DB_STORE = "kv";
 let idbAvailable = typeof indexedDB !== "undefined";
 let idbInstance = null;
@@ -467,8 +461,6 @@ async function migrateLocalStorageToIDB() {
   });
 }
 
-// --- Storage adapter: talks to the cloud backend instead of local IndexedDB/localStorage. ---
-// Every call includes credentials (the httpOnly session cookie) so the backend knows who is asking.
 const API_BASE = "https://api.smalllabs.lt";
 
 const storage = {
@@ -489,13 +481,10 @@ const storage = {
         body: JSON.stringify({ value }),
       });
     } catch (_) {
-      // Tinklo klaida - kito karto set() bandymas vis tiek isius naujausia reiksme,
-      // tad laikinas nepavykimas cia nera kritinis.
     }
   },
 };
 
-// Vienkartinis senu duomenu (is IndexedDB eksporto failo) issiuntimas i serveri.
 async function importoDuomenuFailas(jsonTurinys) {
   const res = await fetch(`${API_BASE}/api/data/bulk-import`, {
     method: "POST",
@@ -532,8 +521,6 @@ function suggestCategoryForMerchant(rawDesc) {
 }
 
 function budgetStartDay() { return Math.min(28, Math.max(1, Number(state.budgetStartDay) || 1)); }
-// Labels a date with the "YYYY-MM" key of the budget-period it falls into
-// (a period runs from budgetStartDay of one calendar month to budgetStartDay-1 of the next).
 function budgetMonthKeyForDate(dateStr) {
   const startDay = budgetStartDay();
   if (startDay <= 1) return dateStr.slice(0, 7);
@@ -557,7 +544,7 @@ function budgetMonthLabel(key) {
   const startDay = budgetStartDay();
   const startDate = new Date(y, m-1, startDay);
   const endDate = new Date(y, m, startDay - 1);
-  return `${startDate.getDate()} ${MONTH_GENITIVE[startDate.getMonth()]} – ${endDate.getDate()} ${MONTH_GENITIVE[endDate.getMonth()]}`;
+  return `${startDate.getDate()} ${MONTH_GENITIVE[startDate.getMonth()]} - ${endDate.getDate()} ${MONTH_GENITIVE[endDate.getMonth()]}`;
 }
 function periodLabel(key, mode) {
   if (mode === "calendar" || budgetStartDay() <= 1) return monthLabel(key);
@@ -625,7 +612,6 @@ let state = {
   cryptoHoldings: load("cryptoHoldings", []),
   editingCryptoId: null,
   cryptoPriceRefreshing: false,
-  // ===== Individualios veiklos mokesčių skaičiuoklė — laikina, neišsaugoma būsena (lengva pašalinti) =====
   taxCalc: { income: "", method: "30pct", actualExpenses: "", otherIncome: "", insuredElsewhere: false, firstYearRelief: false },
   taxCalcResult: null,
   detectedSubscriptions: [],
@@ -670,6 +656,8 @@ let state = {
   reportMode: "month",
   reportYear: new Date().getFullYear(),
   reportCursor: null,
+  showFamily: false,
+  familyInfo: null,
   tab: "overview",
   addSubtab: "expense",
   editingCategory: null,
@@ -876,7 +864,7 @@ function renameCategory(oldName, newName) {
 }
 function deleteCategory(name) {
   if (state.categories.length <= 1) return;
-  if (!confirm(`Ištrinti kategoriją „${name}"? Senos jos išlaidos bus perkeltos į kitą kategoriją.`)) return;
+  if (!confirm(`Ištrinti kategoriją „${name}”? Senos jos išlaidos bus perkeltos į kitą kategoriją.`)) return;
   const fallback = state.categories.find(c => c !== name) || "Kita";
   state.categories = state.categories.filter(c => c !== name);
   delete state.budgets[name]; delete state.categoryConfig[name];
@@ -945,7 +933,6 @@ function updateSavingsBalance(val) {
 }
 function updateSavingsGoalMin(val) { state.savingsGoalMin = parseFloat(String(val).replace(",",".")) || 0; persistAll(); render(); }
 
-// ---- CSV import ----
 function parseCSV(text) {
   const firstLine = text.split("\n")[0];
   const delim = (firstLine.split(";").length > firstLine.split(",").length) ? ";" : (firstLine.split("\t").length > firstLine.split(",").length ? "\t" : ",");
@@ -964,12 +951,9 @@ function parseCSV(text) {
   return rows;
 }
 function looksMojibake(text) {
-  // Windows-1257/ISO-8859-13 read as UTF-8 (or vice versa) produces replacement chars or odd sequences
   return /\uFFFD/.test(text) || /[ÃÂ][€ž©®°]/.test(text);
 }
 function findHeaderRowIndex(rows) {
-  // Some LT bank exports have a few summary/metadata lines before the real header.
-  // Heuristic: the header row is the first row with >=3 columns where a later row of similar column count follows.
   for (let i = 0; i < Math.min(rows.length - 1, 15); i++) {
     if (rows[i].length >= 3 && rows[i+1] && rows[i+1].length === rows[i].length) return i;
   }
@@ -1315,7 +1299,6 @@ function showToastWithAction(msg, actionLabel, actionFn) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { el.style.transition = "opacity .4s"; el.style.opacity = "0"; }, 4000);
 }
-
 function buildTips(monthKey, mode) {
   const cur = monthData(monthKey, mode);
   const prevKey = shiftedMonthKey(monthKey, -1);
@@ -1490,7 +1473,6 @@ function toggleCategoryFilter(c) {
   state.categoryFilter = state.categoryFilter === c ? null : c;
   render();
 }
-
 function renderOverview() {
   const monthKey = currentMonthKey();
   const d = monthData(monthKey, "budget");
@@ -1740,7 +1722,6 @@ function ringGaugeSVG(spent, budget) {
     <div class="chart-center"><div class="tape" style="font-size:16px;font-weight:600;">€${fmt(spent)}</div><div style="font-size:10px;color:var(--faint);">išleista</div></div>
   </div>`;
 }
-
 function renderAdd() {
   const isExpense = state.addSubtab === "expense";
   const editingExpense = state.editingExpenseId ? state.expenses.find(e => e.id === state.editingExpenseId) : null;
@@ -1983,7 +1964,6 @@ function submitIncome(ev) {
   persistAll(); render();
   return false;
 }
-
 function renderReport() {
   const toggle = `<div class="toggle-row" style="margin-bottom:16px;">
     <button type="button" class="toggle-btn ${state.reportMode!=='year'?'active':''}" onclick="state.reportMode='month';render();">Mėnuo</button>
@@ -2237,8 +2217,6 @@ function portfolioCurrentValue() {
 function portfolioInvestedTotal() {
   return state.holdings.reduce((s,h) => s + h.invested, 0);
 }
-
-// --- Broker CSV import (groups transactions per ticker into running totals) ---
 function handlePortfolioCsvFile(input) {
   const file = input.files && input.files[0];
   if (!file) { alert("Failas nepasirinktas. Patikrink, ar failo pavadinimas tikrai baigiasi .csv."); return; }
@@ -2424,7 +2402,6 @@ function netWorthTrendSVG() {
     <text x="${padL-6}" y="${padT+4}" fill="#8FA098" font-size="8" text-anchor="end">€${Math.round(maxVal)}</text>
   </svg>`;
 }
-
 function toggleSettingsSection(key) {
   state.settingsExpanded[key] = !state.settingsExpanded[key];
   render();
@@ -2456,7 +2433,6 @@ function ruleInfoCard(id, title, summary, details, extra) {
   </div>`;
 }
 
-// ===== Individualios veiklos mokesčių skaičiuoklė — izoliuota logika, saugu pašalinti kartu su UI dalimi renderRules() ir jos state.taxCalc/taxCalcResult laukais =====
 function calculateIVTax(inputs) {
   const income = parseFloat(String(inputs.income).replace(",", ".")) || 0;
   const otherIncome = parseFloat(String(inputs.otherIncome).replace(",", ".")) || 0;
@@ -2492,7 +2468,6 @@ function runTaxCalc() {
   state.taxCalcResult = calculateIVTax(state.taxCalc);
   render();
 }
-// ===== Individualios veiklos mokesčių skaičiuoklės logikos pabaiga =====
 
 function calcWhatIf(category, pctCut) {
   let monthsChecked = 0, total = 0;
@@ -2550,7 +2525,7 @@ function renderRules() {
         <input type="checkbox" ${applied503020?'checked':''} onchange="toggleBudgetRule('503020')" style="margin-top:3px;" />
         <div style="flex:1;">
           <div style="font-weight:600;margin-bottom:4px;">50 / 30 / 20 taisyklė</div>
-          <div style="font-size:12px;color:var(--faint);margin-bottom:8px;">50% pajamų — būtinybėms, 30% — norams, 20% — taupymui. Pažymėjus varnelę, iškart perskirstomi „lanksčių" kategorijų biudžetai ir pirmos investicinės kategorijos tikslas. Atžymėjus — grąžinama kaip buvo.</div>
+          <div style="font-size:12px;color:var(--faint);margin-bottom:8px;">50% pajamų — būtinybėms, 30% — norams, 20% — taupymui. Pažymėjus varnelę, iškart perskirstomi „lanksčių” kategorijų biudžetai ir pirmos investicinės kategorijos tikslas. Atžymėjus — grąžinama kaip buvo.</div>
           ${income > 0 ? `<div style="font-size:12px;">Norai dabar: €${fmt(currentWants)} (tikslas €${fmt(income*0.3)}) · Taupymas dabar: €${fmt(currentSavings)} (tikslas €${fmt(income*0.2)})</div>` : `<div style="font-size:12px;color:var(--rust);">Nustatyk Pajamų bazę Nustatymuose, kad veiktų.</div>`}
         </div>
       </div>
@@ -2741,7 +2716,6 @@ function renderRules() {
       "<span style='color:var(--gold);'>Tai bendra informacija, ne asmeninis patarimas — tikslią situaciją (ypač ties ribomis) patikrink su VMI ar buhalteriu.</span>"
     )}
 
-    <!-- ===== INDIVIDUALIOS VEIKLOS MOKESČIŲ SKAIČIUOKLĖ — izoliuota sekcija, saugu pašalinti nepaliečiant kito kodo ===== -->
     ${ruleInfoCard("ivtax", "🧾 Individualios veiklos mokesčiai",
       "GPM (efektyviai ~5–20%) + VSD 12,52% + PSD 6,98% nuo apmokestinamųjų pajamų. Paspaudus — skaičiuoklė žemiau.",
       "<b>GPM su mokesčio kreditu:</b> bazinis 15% tarifas, bet kreditas sumažina efektyvų mokestį iki ~5%, kai apmokestinamos pajamos (AP) ≤ 20 000 €, palaipsniui kylant iki pilno 15% ties 35–42 500 €. Virš 42 500 € jungiasi su visomis kitomis pajamomis pagal progresinius 20/25/32% tarifus.<br><br>" +
@@ -2780,11 +2754,9 @@ function renderRules() {
         </div>`;
       })() : ""}`
     )}
-    <!-- ===== INDIVIDUALIOS VEIKLOS MOKESČIŲ SKAIČIUOKLĖ PABAIGA ===== -->
 
   </div>`;
 }
-
 function yearData(year) {
   let incomeTotal = 0, spentTotal = 0, investedTotal = 0;
   const monthly = [];
@@ -2948,7 +2920,6 @@ function renderYearlyReport() {
     </div>`).join("")}
     `}`;
 }
-
 function renderMonthlyReport() {
   const mode = budgetStartDay() > 1 ? state.reportDateMode : "calendar";
   const monthKey = state.reportCursor;
@@ -3026,7 +2997,6 @@ function renderMonthlyReport() {
     <div class="section-label" style="margin-top:18px;">Daugiausiai leista</div>
     ${top3.length ? top3.map((c,i)=>`<div class="ledger-row" style="display:flex;justify-content:space-between;padding:8px 0;font-size:14px;"><span>${i+1}. ${c}</span><span class="tape">€${fmt(d.byCategory[c])}</span></div>`).join("") : `<div class="empty">Nėra duomenų šiam mėnesiui.</div>`}`;
 }
-
 function renderFinance() {
   const recurringRows = state.recurringTemplates.map(t => {
     if (state.editingRecurringId === t.id) {
@@ -3233,7 +3203,7 @@ function renderFinance() {
 
     ${settingsSectionHeader('crypto', 'Kriptovaliutų portfelis', state.cryptoHoldings.length ? `${state.cryptoHoldings.length} laikym(ai/ų)` : 'Nėra pridėtų')}
     <div class="settings-collapse ${state.settingsExpanded['crypto']?'expanded':''}">
-    <div style="font-size:11px;color:var(--faint);margin-bottom:12px;">Kainos gaunamos iš CoinGecko — nemokamai, be jokio rakto. Įvesk CoinGecko ID, ne trumpinį (pvz. „bitcoin", ne „BTC"; „ethereum", ne „ETH").</div>
+    <div style="font-size:11px;color:var(--faint);margin-bottom:12px;">Kainos gaunamos iš CoinGecko — nemokamai, be jokio rakto. Įvesk CoinGecko ID, ne trumpinį (pvz. „bitcoin”, ne „BTC”; „ethereum”, ne „ETH”).</div>
     ${cryptoRows || `<div class="empty">Nėra pridėtų kripto laikymų.</div>`}
     <form class="stack" style="margin-top:12px;" onsubmit="return submitAddCrypto(event)">
       <div style="display:flex;gap:8px;">
@@ -3306,7 +3276,7 @@ function renderFinance() {
       const allocated = perGoal.reduce((s,g) => s + g.net, 0);
       const unallocated = Math.max(0, state.savingsBalance - allocated);
       return `<div class="section-label" style="margin-top:16px;">Kaip išskaidyta santaupų suma</div>
-        <div style="font-size:11px;color:var(--faint);margin-bottom:8px;">Jei visas santaupas laikai vienoje sąskaitoje, čia matai, kiek iš tos sumos „priklauso" kiekvienam tikslui.</div>
+        <div style="font-size:11px;color:var(--faint);margin-bottom:8px;">Jei visas santaupas laikai vienoje sąskaitoje, čia matai, kiek iš tos sumos „priklauso” kiekvienam tikslui.</div>
         ${perGoal.map(g => `<div class="ledger-row" style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;"><span>${catEmoji(g.c)}${escapeHtml(g.c)}</span><span class="tape" style="color:var(--gold);">€${fmt(g.net)}</span></div>`).join("")}
         <div class="ledger-row" style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-top:1px solid rgba(237,234,224,0.08);margin-top:4px;">
           <span>Nepriskirta</span><span class="tape" style="color:var(--faint);">€${fmt(unallocated)}</span>
@@ -3410,7 +3380,10 @@ function renderSettings() {
 
   return `<div class="topbar" style="display:flex;align-items:center;justify-content:space-between;">
     <div class="eyebrow">Nustatymai</div>
-    <button class="icon-btn" onclick="state.showHelp=true;render();" aria-label="Pagalba" style="border:1px solid rgba(237,234,224,0.15);border-radius:14px;padding:5px 12px;font-size:12px;">Pagalba</button>
+    <div style="display:flex;gap:8px;">
+      <button class="icon-btn" onclick="state.showFamily=true;loadFamilyInfo();render();" aria-label="Šeimos paskyra" style="border:1px solid rgba(237,234,224,0.15);border-radius:14px;padding:5px 12px;font-size:12px;">${ICONS.family}</button>
+      <button class="icon-btn" onclick="state.showHelp=true;render();" aria-label="Pagalba" style="border:1px solid rgba(237,234,224,0.15);border-radius:14px;padding:5px 12px;font-size:12px;">Pagalba</button>
+    </div>
   </div>
   <div class="tabpanel fade-in">
     <div style="display:flex;align-items:center;justify-content:space-between;">
@@ -3491,9 +3464,85 @@ function renderSettings() {
       <span class="field-row-label">Priminimai neįrašius kelias dienas</span>
       <button type="button" onclick="toggleReminders(${state.remindersEnabled ? 'false' : 'true'})" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid ${state.remindersEnabled?'var(--green)':'rgba(237,234,224,0.15)'};background:${state.remindersEnabled?'rgba(111,191,115,0.12)':'transparent'};color:${state.remindersEnabled?'var(--green)':'var(--faint)'};">${state.remindersEnabled ? 'Įjungti ✓' : 'Įjungti'}</button>
     </div>
-    <div class="field-row-hint">Paspaudus pranešimą, atsidarys pati programėlė. Svarbu žinoti: kadangi programėlė neturi serverio, pranešimas gali atsirasti tik tada, kai atidarai programėlę po pertraukos — negalime „pažadinti" jos, kol ji visiškai uždaryta.</div>
+    <div class="field-row-hint">Paspaudus pranešimą, atsidarys pati programėlė. Svarbu žinoti: kadangi programėlė neturi serverio, pranešimas gali atsirasti tik tada, kai atidarai programėlę po pertraukos — negalime „pažadinti” jos, kol ji visiškai uždaryta.</div>
   </div>`;
 }
+async function loadFamilyInfo() {
+  try {
+    const res = await fetch(`${API_BASE}/api/family`, { credentials: "include" });
+    state.familyInfo = res.ok ? await res.json() : null;
+  } catch (_) { state.familyInfo = null; }
+  render();
+}
+async function createFamily() {
+  const nameEl = document.getElementById("family_name_input");
+  const name = nameEl.value.trim();
+  if (!name) { alert("Įrašyk šeimos pavadinimą."); return; }
+  try {
+    const res = await fetch(`${API_BASE}/api/family/create`, {
+      method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.klaida || "Nepavyko sukurti šeimos."); return; }
+    showToast("Šeima sukurta!");
+    loadFamilyInfo();
+  } catch (_) {
+    alert("Nepavyko susisiekti su serveriu.");
+  }
+}
+async function joinFamily() {
+  const codeEl = document.getElementById("family_code_input");
+  const code = codeEl.value.trim();
+  if (!code) { alert("Įrašyk kvietimo kodą."); return; }
+  try {
+    const res = await fetch(`${API_BASE}/api/family/join`, {
+      method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ invite_code: code }),
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.klaida || "Nepavyko prisijungti prie šeimos."); return; }
+    showToast(`Prisijungei prie šeimos „${data.seima.name}”`);
+    loadFamilyInfo();
+  } catch (_) {
+    alert("Nepavyko susisiekti su serveriu.");
+  }
+}
+function renderFamily() {
+  const info = state.familyInfo;
+  return `<div class="topbar" style="display:flex;align-items:center;justify-content:space-between;">
+    <div class="eyebrow">Šeimos paskyra</div>
+    <button class="icon-btn" onclick="state.showFamily=false;render();" aria-label="Uždaryti">${ICONS.x}</button>
+  </div>
+  <div class="tabpanel fade-in">
+    ${info && info.seima ? `
+      <div class="section-label">Šeima: ${escapeHtml(info.seima.name)}</div>
+      ${info.mano_role === "parent" ? `
+        <div class="tip-card" style="border-left-color:var(--gold);">
+          <div style="font-size:13px;margin-bottom:8px;">Kvietimo kodas naujiems nariams:</div>
+          <div class="tape" style="font-size:22px;font-weight:700;text-align:center;letter-spacing:0.1em;">${escapeHtml(info.seima.invite_code)}</div>
+        </div>
+      ` : ""}
+      <div class="section-label" style="margin-top:18px;">Nariai</div>
+      ${info.nariai.map(n => `
+        <div class="ledger-row" style="display:flex;justify-content:space-between;padding:8px 0;">
+          <span style="font-size:14px;">${escapeHtml(n.email)}</span>
+          <span class="cat-tag" style="${n.role==='parent'?'':'color:var(--blue);border-color:var(--blue);'}">${n.role === "parent" ? "Tėvas/mama" : "Vaikas"}</span>
+        </div>
+      `).join("")}
+      <div style="font-size:11px;color:var(--faint);margin-top:14px;">${info.mano_role === "parent" ? "Kaip tėvas/mama, matai savo duomenis. Vaikų duomenų peržiūra bus pridėta netrukus." : "Matai tik savo duomenis."}</div>
+    ` : `
+      <p style="font-size:13px;color:var(--faint);margin-bottom:18px;">Susikurk šeimą arba prisijunk prie esamos su kvietimo kodu.</p>
+      <label class="field">Sukurti naują šeimą<input id="family_name_input" type="text" placeholder="Pvz. Tamašauskų šeima" /></label>
+      <button type="button" class="submit-btn" style="margin-top:10px;margin-bottom:24px;" onclick="createFamily()">Sukurti šeimą</button>
+      <label class="field">Prisijungti su kvietimo kodu<input id="family_code_input" type="text" placeholder="Pvz. AB12CD" style="text-transform:uppercase;" /></label>
+      <button type="button" class="submit-btn" style="margin-top:10px;background:var(--blue);" onclick="joinFamily()">Prisijungti prie šeimos</button>
+    `}
+  </div>`;
+}
+
 function promptSetPin() {
   const pin = prompt("Sugalvok 4 skaitmenų PIN kodą programėlei atrakinti:");
   if (!pin) return;
@@ -3931,25 +3980,25 @@ function renderHelp() {
     ${topic('overview', '📊 Apžvalga — kur matai savo mėnesį',
       `Viršuje — indikatorius (žiedas arba kuro bako rodyklė, keičiama Finansai skirtuke). Spalvos: <b>žalia</b> — biudžetas gerai, <b>geltona</b> — artėji prie limito, <b>raudona</b> — viršyta.<br><br>
       Žemiau — kiekvienos kategorijos juosta su suma. <b>Bakstelėk kategoriją</b>, kad sąrašas žemiau rodytų tik jos įrašus.<br><br>
-      Toliau — Pajamos, Investuota, Taupymo tikslai, Santaupos, ir „Iš viso paskirstyta" (parodo, ar planuoji išleisti/investuoti/taupyti daugiau, nei uždirbi).<br><br>
+      Toliau — Pajamos, Investuota, Taupymo tikslai, Santaupos, ir „Iš viso paskirstyta” (parodo, ar planuoji išleisti/investuoti/taupyti daugiau, nei uždirbi).<br><br>
       Apačioje — visi šio mėnesio įrašai. Gali <b>ieškoti</b> (rodys rezultatus ir iš kitų mėnesių), arba <b>perbraukti</b> įrašą kairėn (ištrinti) ar dešinėn (redaguoti) — arba tiesiog naudoti mygtukus.`
     )}
 
     ${topic('add', '➕ Pridėti — nauja išlaida ar pajama',
       `Du pomygtukai viršuje: <b>Išlaidos</b> / <b>Pajamos</b>.<br><br>
-      Pridedant išlaidą: suma, kategorija (viršuje rodomos 3 dažniausiai naudotos, kaip greiti mygtukai), data, pastaba, ir „Reikalinga/Nereikalinga" (naudinga vėliau matant, kiek išleidi nebūtiniems dalykams).<br><br>
-      <b>„Apmokėta iš santaupų"</b> — pažymėk, kai mokate iš anksčiau sutaupytų pinigų (pvz. kelionėje), ne iš šio mėnesio algos. Tokia suma <b>neįskaičiuojama</b> į mėnesio biudžetą, bet vis tiek matoma sąraše. Gali pridėti kelionės/įvykio pavadinimą, kad vėliau matytum, kiek iš viso išleidai konkrečiam įvykiui (Finansai → Santaupos).`
+      Pridedant išlaidą: suma, kategorija (viršuje rodomos 3 dažniausiai naudotos, kaip greiti mygtukai), data, pastaba, ir „Reikalinga/Nereikalinga” (naudinga vėliau matant, kiek išleidi nebūtiniems dalykams).<br><br>
+      <b>„Apmokėta iš santaupų”</b> — pažymėk, kai mokate iš anksčiau sutaupytų pinigų (pvz. kelionėje), ne iš šio mėnesio algos. Tokia suma <b>neįskaičiuojama</b> į mėnesio biudžetą, bet vis tiek matoma sąraše. Gali pridėti kelionės/įvykio pavadinimą, kad vėliau matytum, kiek iš viso išleidai konkrečiam įvykiui (Finansai → Santaupos).`
     )}
 
     ${topic('report', '📈 Ataskaita — mėnesio ir metų suvestinė',
       `Viršuje perjungiklis <b>Mėnuo / Metai</b>.<br><br>
-      <b>Mėnesio</b> rodo: pajamas, išlaidas, investicijas, likutį, automatinius patarimus (tempo prognozė, didžiausia išlaida, savaitgalio tendencija ir kt.), kategorijų sąrašą, TOP 3 išlaidas. Jei Finansuose nustatei savo biudžeto mėnesio pradžios dieną (pvz. jei alga ateina 15-ą, ne 1-ą), čia gali rinktis tarp „Mano mėnuo" ir „Kalendorinis".<br><br>
+      <b>Mėnesio</b> rodo: pajamas, išlaidas, investicijas, likutį, automatinius patarimus (tempo prognozė, didžiausia išlaida, savaitgalio tendencija ir kt.), kategorijų sąrašą, TOP 3 išlaidas. Jei Finansuose nustatei savo biudžeto mėnesio pradžios dieną (pvz. jei alga ateina 15-ą, ne 1-ą), čia gali rinktis tarp „Mano mėnuo” ir „Kalendorinis”.<br><br>
       <b>Metų</b> viršuje visada rodo <b>Grynąjį turtą</b> (santaupos + investicijos + taupymo tikslai + akcijų/kripto portfeliai − skolos) su tendencijos grafiku, kuris kaupiasi automatiškai kas mėnesį nuo tada, kai pradėjai naudoti šią versiją. Žemiau — metinės sumos ir mėnesių sąrašas.`
     )}
 
     ${topic('rules', '📐 Taisyklės — finansų sveikatos įrankiai',
-      `<b>50/30/20 taisyklė</b> — varnelė, kuri iškart perskirsto tavo „lanksčių" kategorijų biudžetus (50% būtina/30% norai/20% taupymas). Atžymėjus — grąžina, kaip buvo.<br><br>
-      <b>Skolų strategija</b> — jei turi kelias paskolas, pasirenki „Sniego gniūžtę" (mažiausia skola pirma) arba „Lavina" (didžiausios palūkanos pirma), ir gali papildomą sumą nukreipti į pirmą eilėje esančią paskolą.<br><br>
+      `<b>50/30/20 taisyklė</b> — varnelė, kuri iškart perskirsto tavo „lanksčių” kategorijų biudžetus (50% būtina/30% norai/20% taupymas). Atžymėjus — grąžina, kaip buvo.<br><br>
+      <b>Skolų strategija</b> — jei turi kelias paskolas, pasirenki „Sniego gniūžtę” (mažiausia skola pirma) arba „Lavina” (didžiausios palūkanos pirma), ir gali papildomą sumą nukreipti į pirmą eilėje esančią paskolą.<br><br>
       <b>Avarinis fondas</b> — palygina tavo santaupas su rekomenduojama 3 mėn. būtinų išlaidų suma.<br><br>
       <b>Informaciniai tekstukai</b> (automobilio, būsto, nuomos, pensijos taisyklės, akcijų mokesčiai) — paspaudus išsiskleidžia išsamesnis paaiškinimas.<br><br>
       <b>Skaičiuoklės</b> — naujo pirkinio/paskolos saugumo įvertinimas (pagal tavo tikras pajamas) ir individualios veiklos mokesčių įvertinimas (GPM/VSD/PSD), pastarasis — po informaciniu tekstu apie tuos mokesčius.<br><br>
@@ -3959,17 +4008,17 @@ function renderHelp() {
     ${topic('finance', '💰 Finansai — pasikartojantys mokėjimai, importas, turtas',
       `Šiame skirtuke viskas suskleista pagal temą — paspausk antraštę, kad atsivertų:<br><br>
       <b>Pasikartojančios išlaidos/pajamos</b> — nustatai kartą (pvz. nuoma, alga), programėlė pati prideda kiekvieno naujo mėnesio pradžioje.<br><br>
-      <b>Galimos prenumeratos</b> — paspaudus „Ieškoti", programėlė pati suranda mokėjimus, kurie kartojasi bent 3 mėnesius, ir siūlo paversti juos pasikartojančiomis (biudžeto limitas nesikeičia, tik automatizuojamas įvedimas).<br><br>
+      <b>Galimos prenumeratos</b> — paspaudus „Ieškoti”, programėlė pati suranda mokėjimus, kurie kartojasi bent 3 mėnesius, ir siūlo paversti juos pasikartojančiomis (biudžeto limitas nesikeičia, tik automatizuojamas įvedimas).<br><br>
       <b>Banko išrašo importas</b> — įkelk CSV failą iš banko, priskirk stulpelius (data/suma/aprašymas), programėlė pasiūlys kategorijas pagal žinomas parduotuves.<br><br>
       <b>Investicijų portfelis</b> — įvedi Finnhub API raktą (nemokamas), pridedi akcijas (tikslas, vienetai, investuota suma) arba importuoji brokerio CSV (Trading 212, Revolut ir kt.) — programėlė susumuoja pirkimus automatiškai.<br><br>
-      <b>Kriptovaliutų portfelis</b> — tas pats principas, bet kainos iš CoinGecko, be jokio rakto. Įvesk CoinGecko ID (pvz. „bitcoin", ne „BTC").<br><br>
+      <b>Kriptovaliutų portfelis</b> — tas pats principas, bet kainos iš CoinGecko, be jokio rakto. Įvesk CoinGecko ID (pvz. „bitcoin”, ne „BTC”).<br><br>
       <b>Atsarginė kopija</b> — eksportuok visus duomenis (JSON, atkūrimui) arba CSV (Excel/Sheets analizei).<br><br>
       <b>Mano biudžeto mėnuo, Santaupos, Pajamų bazė</b> — bendri nustatymai, veikiantys visoje programėlėje (aprašyta atitinkamuose skirtukuose aukščiau).`
     )}
 
     ${topic('settings', '⚙️ Nustatymai — kategorijos ir išvaizda',
       `<b>Keturi kategorijų tipai:</b><br>
-      • <b>Išlaidų</b> — įprastas mėnesio biudžeto limitas. Gali būti „būtina" (nesikeičia nuo pajamų svyravimų) arba „lanksti".<br>
+      • <b>Išlaidų</b> — įprastas mėnesio biudžeto limitas. Gali būti „būtina” (nesikeičia nuo pajamų svyravimų) arba „lanksti”.<br>
       • <b>Investicinė</b> — mėnesio įnašo tikslas augančiam turtui (akcijos, fondai). Žalia = tikslas pasiektas. Skaičiuojama į Grynąjį turtą.<br>
       • <b>Taupymo tikslas</b> — panašiai kaip investicinė, bet konkrečiam dalykui (kelionė, pirkinys), ne augimui. Gali nurodyti bendrą sumą ir/ar datą — programėlė paskaičiuos, kiek reikia atidėti per mėnesį (arba tiesiog kiek liko iki tikslo, jei datos nenurodei).<br>
       • <b>Paskola</b> — mažėjanti skola su minimaline mėnesio įmoka, kuri įskaičiuojama į biudžetą. Žalia = įmoka sumokėta, raudona = ne. Rodo projektuojamą datą, kada būsi be skolos.<br><br>
@@ -3978,7 +4027,7 @@ function renderHelp() {
     )}
 
     ${topic('security', '🔒 Duomenų saugumas',
-      `Visi duomenys saugomi <b>tik šiame telefone/naršyklėje</b> (naudojant IndexedDB) — niekas kitas jų nemato, jokie duomenys niekur nesiunčiami, išskyrus akcijų/kripto kainų užklausas (kai pats paspaudi „Atnaujinti kainas") ir bendrą CSV/rinkos taisyklių paiešką.<br><br>
+      `Visi duomenys saugomi <b>tik šiame telefone/naršyklėje</b> (naudojant IndexedDB) — niekas kitas jų nemato, jokie duomenys niekur nesiunčiami, išskyrus akcijų/kripto kainų užklausas (kai pats paspaudi „Atnaujinti kainas”) ir bendrą CSV/rinkos taisyklių paiešką.<br><br>
       <b>Rekomenduojame reguliariai daryti atsarginę kopiją</b> (Finansai → Atsarginė kopija → Eksportuoti) — jei telefonas sugestų, naršyklė būtų išvalyta, ar pamirštum PIN, tai vienintelis būdas atkurti duomenis.`
     )}
   </div>`;
@@ -4040,6 +4089,7 @@ function render() {
   }
   if (state.showRolloverPrompt) { app.innerHTML = renderRolloverPrompt(); return; }
   if (state.showHelp) { app.innerHTML = renderHelp(); return; }
+  if (state.showFamily) { app.innerHTML = renderFamily(); return; }
   if (state.showWrapped) { app.innerHTML = renderWrapped(); return; }
   if (state.importStep === "mapping") { app.innerHTML = renderImportMapping(); return; }
   if (state.importStep === "review") { app.innerHTML = renderImportReview(); return; }
@@ -4128,7 +4178,6 @@ async function boot() {
   render();
   window.scrollTo(0, 0);
 }
-// boot() dabar kviecziamas is pradetiApp() po sekmingo prisijungimo, ne automatiskai cia.
 
 document.addEventListener("visibilitychange", () => {
   if (document.hidden && state.appPin) {
