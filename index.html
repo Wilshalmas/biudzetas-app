@@ -3588,8 +3588,6 @@ async function joinFamily() {
   }
 }
 async function setMemberRole(narioId, naujaRole) {
-  const zmogiskasVardas = naujaRole === "parent" ? "Tėvas/mama" : "Vaikas";
-  if (!confirm(`Pakeisti šio nario rolę į „${zmogiskasVardas}"?`)) return;
   try {
     const res = await fetch(`${API_BASE}/api/family/member/${narioId}/role`, {
       method: "PATCH", credentials: "include",
@@ -3597,11 +3595,11 @@ async function setMemberRole(narioId, naujaRole) {
       body: JSON.stringify({ role: naujaRole }),
     });
     const data = await res.json();
-    if (!res.ok) { alert(data.klaida || "Nepavyko pakeisti rolės."); return; }
+    if (!res.ok) { showToast(data.klaida || "Nepavyko pakeisti rolės."); loadFamilyInfo(); return; }
     showToast("Rolė pakeista");
     loadFamilyInfo();
   } catch (_) {
-    alert("Nepavyko susisiekti su serveriu.");
+    showToast("Nepavyko susisiekti su serveriu.");
   }
 }
 function renderFamily() {
@@ -3620,17 +3618,32 @@ function renderFamily() {
         </div>
       ` : ""}
       <div class="section-label" style="margin-top:18px;">Nariai</div>
-      ${info.nariai.map(n => `
-        <div class="ledger-row" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;gap:8px;">
-          <span style="font-size:14px;">${escapeHtml(n.email)}${manoVartotojas && n.id === manoVartotojas.id ? ' <span style="color:var(--faint);font-size:11px;">(tu)</span>' : ''}</span>
-          ${info.mano_role === "parent" && !(manoVartotojas && n.id === manoVartotojas.id) ? `
-            <button type="button" onclick="setMemberRole(${n.id}, '${n.role === 'parent' ? 'child' : 'parent'}')" class="cat-tag" style="cursor:pointer;border:none;${n.role==='parent'?'':'color:var(--blue);border-color:var(--blue);'}background:${n.role==='parent'?'rgba(201,162,39,0.1)':'rgba(90,150,220,0.1)'};">${n.role === "parent" ? "Tėvas/mama ▾" : "Vaikas ▾"}</button>
-          ` : `
-            <span class="cat-tag" style="${n.role==='parent'?'':'color:var(--blue);border-color:var(--blue);'}">${n.role === "parent" ? "Tėvas/mama" : "Vaikas"}</span>
-          `}
-        </div>
-      `).join("")}
-      <div style="font-size:11px;color:var(--faint);margin-top:14px;">${info.mano_role === "parent" ? "Paspaudus prie nario esančią žymę, gali pakeisti jo rolę. Kaip tėvas/mama matai visų vaikų duomenis; vaikų sąsaja rodo mažiau informacijos (be ataskaitų ir taisyklių)." : "Matai tik savo duomenis — paprastesnėje, vaikams pritaikytoje sąsajoje."}</div>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;">
+        <thead>
+          <tr style="border-bottom:1px solid rgba(237,234,224,0.15);">
+            <th style="text-align:left;padding:6px 4px;font-weight:500;color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:0.04em;">El. paštas</th>
+            <th style="text-align:right;padding:6px 4px;font-weight:500;color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:0.04em;">Rolė</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${info.nariai.map(n => `
+            <tr style="border-bottom:1px solid rgba(237,234,224,0.08);">
+              <td style="padding:8px 4px;">${escapeHtml(n.email)}${manoVartotojas && n.id === manoVartotojas.id ? ' <span style="color:var(--faint);font-size:11px;">(tu)</span>' : ''}</td>
+              <td style="padding:8px 4px;text-align:right;">
+                ${info.mano_role === "parent" && !(manoVartotojas && n.id === manoVartotojas.id) ? `
+                  <select onchange="setMemberRole(${n.id}, this.value)" style="font-size:12px;padding:4px 6px;border-radius:6px;border:1px solid ${n.role==='parent'?'var(--gold)':'var(--blue)'};background:${n.role==='parent'?'rgba(201,162,39,0.08)':'rgba(90,150,220,0.08)'};color:${n.role==='parent'?'var(--gold)':'var(--blue)'};">
+                    <option value="parent" ${n.role==='parent'?'selected':''}>Tėvas/mama</option>
+                    <option value="child" ${n.role==='child'?'selected':''}>Vaikas</option>
+                  </select>
+                ` : `
+                  <span class="cat-tag" style="${n.role==='parent'?'':'color:var(--blue);border-color:var(--blue);'}">${n.role === "parent" ? "Tėvas/mama" : "Vaikas"}</span>
+                `}
+              </td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+      <div style="font-size:11px;color:var(--faint);margin-top:14px;">${info.mano_role === "parent" ? "Pasirink rolę iš sąrašo prie nario, kad ją pakeistum iš karto. Kaip tėvas/mama matai visų vaikų duomenis; vaikų sąsaja rodo mažiau informacijos (be ataskaitų ir taisyklių)." : "Matai tik savo duomenis — paprastesnėje, vaikams pritaikytoje sąsajoje."}</div>
     ` : `
       <p style="font-size:13px;color:var(--faint);margin-bottom:18px;">Susikurk šeimą arba prisijunk prie esamos su kvietimo kodu.</p>
       <label class="field">Sukurti naują šeimą<input id="family_name_input" type="text" placeholder="Pvz. Tamašauskų šeima" /></label>
