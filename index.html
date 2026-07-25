@@ -523,6 +523,14 @@ async function migrateLocalStorageToIDB() {
 
 const API_BASE = "https://api.smalllabs.lt";
 
+let paskutinisSyncKlaidosPranesimas = 0;
+function praneztiSyncKlaida() {
+  const dabar = Date.now();
+  if (dabar - paskutinisSyncKlaidosPranesimas > 4000) {
+    paskutinisSyncKlaidosPranesimas = dabar;
+    showToast("Nepavyko įrašo išsiųsti į serverį — patikrink interneto ryšį ir bandyk dar kartą.");
+  }
+}
 const storage = {
   async getAll() {
     const res = await fetch(`${API_BASE}/api/data`, { credentials: "include" });
@@ -534,13 +542,15 @@ const storage = {
   },
   async set(key, value) {
     try {
-      await fetch(`${API_BASE}/api/data/${encodeURIComponent(key)}`, {
+      const res = await fetch(`${API_BASE}/api/data/${encodeURIComponent(key)}`, {
         method: "PUT",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ value }),
       });
+      if (!res.ok) { praneztiSyncKlaida(); }
     } catch (_) {
+      praneztiSyncKlaida();
     }
   },
 };
@@ -670,6 +680,7 @@ let state = {
   priceRefreshing: false,
   editingHoldingId: null,
   cryptoHoldings: load("cryptoHoldings", []),
+  pendingApprovals: load("pendingApprovals", []),
   editingCryptoId: null,
   cryptoPriceRefreshing: false,
   taxCalc: { income: "", method: "30pct", actualExpenses: "", otherIncome: "", insuredElsewhere: false, firstYearRelief: false },
@@ -721,6 +732,9 @@ let state = {
   confirmRemoveMemberId: null,
   viewingChildId: null,
   childExpenses: null,
+  childPending: null,
+  childHoldings: null,
+  childCryptoHoldings: null,
   editingChildExpenseId: null,
   tab: "overview",
   addSubtab: "expense",
@@ -2169,11 +2183,20 @@ function allTimeLoanRemainingTotal() {
   return state.categories.filter(c => catType(c) === "loan")
     .reduce((s,c) => s + loanRemaining(c), 0);
 }
+function esuVaikoRoleje() {
+  return !!(state.familyInfo && state.familyInfo.mano_role === "child");
+}
 function addHolding(ticker, units, invested) {
   const sym = String(ticker||"").trim().toUpperCase();
   const u = parseFloat(String(units).replace(",",".")) || 0;
   const inv = parseFloat(String(invested).replace(",",".")) || 0;
   if (!sym || u <= 0) { alert("Įvesk tikslą ir teigiamą vienetų skaičių."); return; }
+  if (esuVaikoRoleje()) {
+    state.pendingApprovals.push({ id: uid(), type: "holding", ticker: sym, units: u, invested: inv, createdAt: new Date().toISOString() });
+    persistAll(); render();
+    showToast(`„${sym}“ išsiųsta tėvams patvirtinti`);
+    return;
+  }
   const existing = state.holdings.find(h => h.ticker === sym);
   if (existing) { existing.units += u; existing.invested += inv; }
   else state.holdings.push({ id: uid(), ticker: sym, units: u, invested: inv, lastPrice: null, lastPriceAt: null, priceError: null });
@@ -2223,6 +2246,12 @@ function addCryptoHolding(coinId, units, invested) {
   const u = parseFloat(String(units).replace(",",".")) || 0;
   const inv = parseFloat(String(invested).replace(",",".")) || 0;
   if (!id || u <= 0) { alert("Įvesk CoinGecko ID (pvz. bitcoin) ir teigiamą vienetų skaičių."); return; }
+  if (esuVaikoRoleje()) {
+    state.pendingApprovals.push({ id: uid(), type: "crypto", coinId: id, units: u, invested: inv, createdAt: new Date().toISOString() });
+    persistAll(); render();
+    showToast(`„${id}“ išsiųsta tėvams patvirtinti`);
+    return;
+  }
   const existing = state.cryptoHoldings.find(h => h.coinId === id);
   if (existing) { existing.units += u; existing.invested += inv; }
   else state.cryptoHoldings.push({ id: uid(), coinId: id, units: u, invested: inv, lastPrice: null, lastPriceAt: null, priceError: null });
@@ -3185,6 +3214,17 @@ function renderFinance() {
   return `<div class="topbar"><div class="eyebrow">Finansai ir importas</div></div>
   <div class="tabpanel fade-in">
 
+    ${state.pendingApprovals && state.pendingApprovals.length > 0 ? `
+      <div class="tip-card" style="border-left-color:var(--blue);margin-bottom:16px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:6px;color:var(--blue);">Laukia tėvų patvirtinimo</div>
+        ${state.pendingApprovals.map(p => `
+          <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;">
+            <span>${p.type === 'holding' ? escapeHtml(p.ticker) : escapeHtml(p.coinId)} · ${p.units} vnt.</span>
+            <span class="tape">€${fmt(p.invested)}</span>
+          </div>
+        `).join("")}
+      </div>
+    ` : ""}
     ${settingsSectionHeader('recurexp', 'Pasikartojančios išlaidos', state.recurringTemplates.length ? `${state.recurringTemplates.length} šablon(ai/ų) · €${fmt(state.recurringTemplates.reduce((s,t)=>s+Number(t.amount),0))}/mėn.` : 'Nėra pridėtų')}
     <div class="settings-collapse ${state.settingsExpanded['recurexp']?'expanded':''}">
     ${recurringRows || `<div class="empty">Nėra pasikartojančių išlaidų.</div>`}
@@ -3629,30 +3669,37 @@ async function toggleViewChildExpenses(narioId) {
   if (state.viewingChildId === narioId) {
     state.viewingChildId = null;
     state.childExpenses = null;
+    state.childPending = null;
+    state.childHoldings = null;
+    state.childCryptoHoldings = null;
     state.editingChildExpenseId = null;
     render();
     return;
   }
   state.viewingChildId = narioId;
   state.childExpenses = null;
+  state.childPending = null;
   state.editingChildExpenseId = null;
   render();
   try {
     const res = await fetch(`${API_BASE}/api/data?vartotojo_id=${narioId}`, { credentials: "include" });
     const data = await res.json();
     state.childExpenses = Array.isArray(data.expenses) ? data.expenses : [];
+    state.childPending = Array.isArray(data.pendingApprovals) ? data.pendingApprovals : [];
+    state.childHoldings = Array.isArray(data.holdings) ? data.holdings : [];
+    state.childCryptoHoldings = Array.isArray(data.cryptoHoldings) ? data.cryptoHoldings : [];
   } catch (_) {
-    state.childExpenses = [];
+    state.childExpenses = []; state.childPending = []; state.childHoldings = []; state.childCryptoHoldings = [];
     showToast("Nepavyko įkelti vaiko įrašų.");
   }
   render();
 }
-async function issaugotiVaikoIrasus(narioId, naujiIrasai) {
+async function issaugotiVaikoDuomenis(narioId, raktas, reiksme) {
   try {
-    const res = await fetch(`${API_BASE}/api/data/expenses?vartotojo_id=${narioId}`, {
+    const res = await fetch(`${API_BASE}/api/data/${encodeURIComponent(raktas)}?vartotojo_id=${narioId}`, {
       method: "PUT", credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ value: naujiIrasai }),
+      body: JSON.stringify({ value: reiksme }),
     });
     const data = await res.json();
     if (!res.ok) { showToast(data.klaida || "Nepavyko išsaugoti."); return false; }
@@ -3665,7 +3712,7 @@ async function issaugotiVaikoIrasus(narioId, naujiIrasai) {
 async function deleteChildExpense(expId) {
   if (!state.childExpenses) return;
   const nauji = state.childExpenses.filter(e => e.id !== expId);
-  const ok = await issaugotiVaikoIrasus(state.viewingChildId, nauji);
+  const ok = await issaugotiVaikoDuomenis(state.viewingChildId, "expenses", nauji);
   if (ok) { state.childExpenses = nauji; showToast("Įrašas ištrintas"); render(); }
 }
 function startEditChildExpense(expId) { state.editingChildExpenseId = expId; render(); }
@@ -3677,15 +3724,58 @@ async function saveEditChildExpense(expId) {
   if (isNaN(naujaSuma) || naujaSuma <= 0) { showToast("Neteisinga suma."); return; }
   const naujaKategorija = (catEl.value || "").trim() || "Kita";
   const nauji = state.childExpenses.map(e => e.id === expId ? { ...e, amount: naujaSuma, category: naujaKategorija } : e);
-  const ok = await issaugotiVaikoIrasus(state.viewingChildId, nauji);
+  const ok = await issaugotiVaikoDuomenis(state.viewingChildId, "expenses", nauji);
   if (ok) { state.childExpenses = nauji; state.editingChildExpenseId = null; showToast("Įrašas atnaujintas"); render(); }
+}
+async function approveChildPending(itemId) {
+  if (!state.childPending) return;
+  const item = state.childPending.find(p => p.id === itemId);
+  if (!item) return;
+  const naujiPending = state.childPending.filter(p => p.id !== itemId);
+  const raktas = item.type === "holding" ? "holdings" : "cryptoHoldings";
+  const sarasas = item.type === "holding" ? (state.childHoldings || []) : (state.childCryptoHoldings || []);
+  const laukas = item.type === "holding" ? "ticker" : "coinId";
+  const reiksme = item.type === "holding" ? item.ticker : item.coinId;
+  const yraJau = sarasas.find(h => h[laukas] === reiksme);
+  const naujasSarasas = yraJau
+    ? sarasas.map(h => h[laukas] === reiksme ? { ...h, units: h.units + item.units, invested: h.invested + item.invested } : h)
+    : [...sarasas, { id: uid(), [laukas]: reiksme, units: item.units, invested: item.invested, lastPrice: null, lastPriceAt: null, priceError: null }];
+  const ok1 = await issaugotiVaikoDuomenis(state.viewingChildId, "pendingApprovals", naujiPending);
+  const ok2 = await issaugotiVaikoDuomenis(state.viewingChildId, raktas, naujasSarasas);
+  if (ok1 && ok2) {
+    state.childPending = naujiPending;
+    if (item.type === "holding") state.childHoldings = naujasSarasas; else state.childCryptoHoldings = naujasSarasas;
+    showToast("Investicija patvirtinta");
+    render();
+  }
+}
+async function rejectChildPending(itemId) {
+  if (!state.childPending) return;
+  const nauji = state.childPending.filter(p => p.id !== itemId);
+  const ok = await issaugotiVaikoDuomenis(state.viewingChildId, "pendingApprovals", nauji);
+  if (ok) { state.childPending = nauji; showToast("Atmesta"); render(); }
+}
+function renderChildPendingPanel() {
+  if (!state.childPending || state.childPending.length === 0) return "";
+  return `<div style="margin-top:8px;padding:8px 0;border-top:1px solid rgba(237,234,224,0.08);">
+    <div style="font-size:11px;color:var(--blue);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">Laukia patvirtinimo</div>
+    ${state.childPending.map(p => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;gap:8px;">
+        <span style="font-size:13px;">${p.type === 'holding' ? escapeHtml(p.ticker) : escapeHtml(p.coinId)} · ${p.units} vnt. · €${fmt(p.invested)}</span>
+        <div style="display:flex;gap:4px;flex-shrink:0;">
+          <button type="button" onclick="approveChildPending('${p.id}')" class="icon-btn" style="color:var(--green);" aria-label="Patvirtinti">${ICONS.check}</button>
+          <button type="button" onclick="rejectChildPending('${p.id}')" class="icon-btn" style="color:var(--red,#D97742);" aria-label="Atmesti">${ICONS.x}</button>
+        </div>
+      </div>
+    `).join("")}
+  </div>`;
 }
 function renderChildExpensesPanel() {
   if (state.childExpenses === null) return `<div style="font-size:12px;color:var(--faint);padding:8px 0;">Kraunama...</div>`;
   const list = state.childExpenses.slice().sort((a,b) => (b.date||"").localeCompare(a.date||"")).slice(0, 30);
-  if (list.length === 0) return `<div style="font-size:12px;color:var(--faint);padding:8px 0;">Įrašų dar nėra.</div>`;
-  return `<div style="margin-top:8px;border-top:1px solid rgba(237,234,224,0.08);padding-top:6px;">
-    ${list.map(e => state.editingChildExpenseId === e.id ? `
+  return `${renderChildPendingPanel()}
+  <div style="margin-top:8px;border-top:1px solid rgba(237,234,224,0.08);padding-top:6px;">
+    ${list.length === 0 ? `<div style="font-size:12px;color:var(--faint);padding:8px 0;">Įrašų dar nėra.</div>` : list.map(e => state.editingChildExpenseId === e.id ? `
       <div style="display:flex;gap:6px;align-items:center;padding:6px 0;">
         <input id="child_exp_amount_${e.id}" type="text" inputmode="decimal" value="${e.amount}" style="width:70px;font-size:12px;padding:4px 6px;" />
         <input id="child_exp_cat_${e.id}" type="text" value="${escapeHtml(e.category||'')}" style="flex:1;min-width:0;font-size:12px;padding:4px 6px;" />
@@ -3722,7 +3812,7 @@ function renderFamily() {
           <div class="tape" style="font-size:22px;font-weight:700;text-align:center;letter-spacing:0.1em;">${escapeHtml(info.seima.invite_code)}</div>
         </div>
       ` : ""}
-      <div class="section-label" style="margin-top:18px;">Nariai</div>
+      <div class="section-label" style="margin-top:18px;">Nariai (${info.nariai.length}/6)</div>
       ${info.nariai.map(n => `
         <div style="padding:10px 0;border-bottom:1px solid rgba(237,234,224,0.08);">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
@@ -3745,7 +3835,7 @@ function renderFamily() {
       `).join("")}
       <div style="font-size:11px;color:var(--faint);margin-top:14px;">${info.mano_role === "parent" ? "Kaip tėvas/mama gali keisti nario rolę, peržiūrėti bei koreguoti vaiko įrašus, arba pašalinti narį iš šeimos." : "Matai tik savo duomenis — paprastesnėje, vaikams pritaikytoje sąsajoje."}</div>
     ` : `
-      <p style="font-size:13px;color:var(--faint);margin-bottom:18px;">Susikurk šeimą arba prisijunk prie esamos su kvietimo kodu.</p>
+      <p style="font-size:13px;color:var(--faint);margin-bottom:18px;">Susikurk šeimą arba prisijunk prie esamos su kvietimo kodu. Viena šeima gali turėti iki 6 narių.</p>
       <label class="field">Sukurti naują šeimą<input id="family_name_input" type="text" placeholder="Pvz. Tamašauskų šeima" /></label>
       <button type="button" class="submit-btn" style="margin-top:10px;margin-bottom:24px;" onclick="createFamily()">Sukurti šeimą</button>
       <label class="field">Prisijungti su kvietimo kodu<input id="family_code_input" type="text" placeholder="Pvz. AB12CD" style="text-transform:uppercase;" /></label>
@@ -4310,12 +4400,14 @@ function render() {
   // (biudzeto skaiciuokliu/planavimo skyriaus), kaip susitarta seimos nustatymuose.
   const esuVaikas = !!(state.familyInfo && state.familyInfo.mano_role === "child");
   if (esuVaikas && (state.tab === "report" || state.tab === "rules")) { state.tab = "overview"; }
+  if (!esuVaikas && state.tab === "vaikoataskaita") { state.tab = "overview"; }
 
   let body = "";
   if (state.tab === "overview") body = renderOverview();
   else if (state.tab === "add") body = renderAdd();
   else if (state.tab === "report" && !esuVaikas) body = renderReport();
   else if (state.tab === "rules" && !esuVaikas) body = renderRules();
+  else if (state.tab === "vaikoataskaita" && esuVaikas) body = renderVaikoAtaskaita();
   else if (state.tab === "finance") body = renderFinance();
   else if (state.tab === "settings") body = renderSettings();
   else body = renderOverview();
@@ -4326,6 +4418,7 @@ function render() {
       <button class="nav-item ${state.tab==='add'?'active':''}" onclick="setTab('add')">${ICONS.plus}Pridėti</button>
       ${!esuVaikas ? `<button class="nav-item ${state.tab==='report'?'active':''}" onclick="setTab('report')">${ICONS.file}Ataskaita</button>` : ''}
       ${!esuVaikas ? `<button class="nav-item ${state.tab==='rules'?'active':''}" onclick="setTab('rules')">${ICONS.rules}Taisyklės</button>` : ''}
+      ${esuVaikas ? `<button class="nav-item ${state.tab==='vaikoataskaita'?'active':''}" onclick="setTab('vaikoataskaita')">${ICONS.file}Mano diena</button>` : ''}
       <button class="nav-item ${state.tab==='finance'?'active':''}" onclick="setTab('finance')">${ICONS.finance}Finansai</button>
       <button class="nav-item ${state.tab==='settings'?'active':''}" onclick="setTab('settings')">${ICONS.settings}Nustatymai</button>
     </div>`;
@@ -4339,13 +4432,47 @@ function render() {
   }
   if (state.tab === "add" && state.addSubtab === "expense" && !state.editingExpenseId) setNecessity("reikalinga");
 }
+function renderVaikoAtaskaita() {
+  const menesineSuma = state.expenses
+    .filter(e => (e.date || "").slice(0, 7) === currentMonthKey())
+    .reduce((s, e) => s + Number(e.amount), 0);
+  const grupes = {};
+  state.expenses.forEach(e => {
+    const d = e.date || "—";
+    if (!grupes[d]) grupes[d] = [];
+    grupes[d].push(e);
+  });
+  const datos = Object.keys(grupes).sort((a, b) => b.localeCompare(a)).slice(0, 30);
+  return `<div class="topbar"><div class="eyebrow">Mano diena</div></div>
+  <div class="tabpanel fade-in">
+    <div class="tip-card" style="text-align:center;margin-bottom:16px;">
+      <div style="font-size:12px;color:var(--faint);margin-bottom:4px;">Iš viso šį mėnesį išleista</div>
+      <div class="tape" style="font-size:24px;font-weight:700;">€${fmt(menesineSuma)}</div>
+    </div>
+    ${datos.length === 0 ? `<div style="font-size:13px;color:var(--faint);text-align:center;padding:20px 0;">Įrašų dar nėra.</div>` : datos.map(d => {
+      const irasai = grupes[d];
+      const dienosSuma = irasai.reduce((s, e) => s + Number(e.amount), 0);
+      return `<div style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">
+          <span>${escapeHtml(d)}</span><span>€${fmt(dienosSuma)}</span>
+        </div>
+        ${irasai.map(e => `
+          <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px;">
+            <span>${escapeHtml(e.category || '—')}</span>
+            <span class="tape">€${fmt(e.amount)}</span>
+          </div>
+        `).join("")}
+      </div>`;
+    }).join("")}
+  </div>`;
+}
 function setTab(t) {
   if (t === "report") state.reportCursor = currentMonthKey();
   state.tab = t;
   render();
 }
 
-const PERSISTED_KEYS = ["expenses","incomes","budgets","categories","categoryConfig","baseIncome","gaugeStyle","theme","lastExportAt","recurringTemplates","budgetStartDay","savingsBalance","savingsGoalMin","savingsLog","merchantMap","importedHashes","appPin","debtStrategy","appliedRules","ruleSnapshots","netWorthHistory","recurringIncomes","csvMappingMemory","holdings","finnhubApiKey","cryptoHoldings","fontSize","categoryViewStyle","remindersEnabled","lastReminderShownAt","rolloverResolvedMonths"];
+const PERSISTED_KEYS = ["expenses","incomes","budgets","categories","categoryConfig","baseIncome","gaugeStyle","theme","lastExportAt","recurringTemplates","budgetStartDay","savingsBalance","savingsGoalMin","savingsLog","merchantMap","importedHashes","appPin","debtStrategy","appliedRules","ruleSnapshots","netWorthHistory","recurringIncomes","csvMappingMemory","holdings","finnhubApiKey","cryptoHoldings","fontSize","categoryViewStyle","remindersEnabled","lastReminderShownAt","rolloverResolvedMonths","pendingApprovals"];
 
 const KEY_SCHEMA = {
   expenses: "array", incomes: "array", budgets: "object", categories: "array", categoryConfig: "object",
@@ -4360,6 +4487,7 @@ const KEY_SCHEMA = {
   remindersEnabled: "boolean",
   lastReminderShownAt: "string",
   rolloverResolvedMonths: "array",
+  pendingApprovals: "array",
 };
 function typeMatches(val, expected) {
   if (val === null || val === undefined) return true;
