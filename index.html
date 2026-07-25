@@ -718,6 +718,10 @@ let state = {
   reportCursor: null,
   showFamily: false,
   familyInfo: null,
+  confirmRemoveMemberId: null,
+  viewingChildId: null,
+  childExpenses: null,
+  editingChildExpenseId: null,
   tab: "overview",
   addSubtab: "expense",
   editingCategory: null,
@@ -3602,6 +3606,107 @@ async function setMemberRole(narioId, naujaRole) {
     showToast("Nepavyko susisiekti su serveriu.");
   }
 }
+async function removeMember(narioId) {
+  if (state.confirmRemoveMemberId !== narioId) {
+    state.confirmRemoveMemberId = narioId;
+    render();
+    return;
+  }
+  try {
+    const res = await fetch(`${API_BASE}/api/family/member/${narioId}`, { method: "DELETE", credentials: "include" });
+    const data = await res.json();
+    state.confirmRemoveMemberId = null;
+    if (!res.ok) { showToast(data.klaida || "Nepavyko pašalinti nario."); render(); return; }
+    showToast("Narys pašalintas iš šeimos");
+    loadFamilyInfo();
+  } catch (_) {
+    state.confirmRemoveMemberId = null;
+    showToast("Nepavyko susisiekti su serveriu.");
+    render();
+  }
+}
+async function toggleViewChildExpenses(narioId) {
+  if (state.viewingChildId === narioId) {
+    state.viewingChildId = null;
+    state.childExpenses = null;
+    state.editingChildExpenseId = null;
+    render();
+    return;
+  }
+  state.viewingChildId = narioId;
+  state.childExpenses = null;
+  state.editingChildExpenseId = null;
+  render();
+  try {
+    const res = await fetch(`${API_BASE}/api/data?vartotojo_id=${narioId}`, { credentials: "include" });
+    const data = await res.json();
+    state.childExpenses = Array.isArray(data.expenses) ? data.expenses : [];
+  } catch (_) {
+    state.childExpenses = [];
+    showToast("Nepavyko įkelti vaiko įrašų.");
+  }
+  render();
+}
+async function issaugotiVaikoIrasus(narioId, naujiIrasai) {
+  try {
+    const res = await fetch(`${API_BASE}/api/data/expenses?vartotojo_id=${narioId}`, {
+      method: "PUT", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value: naujiIrasai }),
+    });
+    const data = await res.json();
+    if (!res.ok) { showToast(data.klaida || "Nepavyko išsaugoti."); return false; }
+    return true;
+  } catch (_) {
+    showToast("Nepavyko susisiekti su serveriu.");
+    return false;
+  }
+}
+async function deleteChildExpense(expId) {
+  if (!state.childExpenses) return;
+  const nauji = state.childExpenses.filter(e => e.id !== expId);
+  const ok = await issaugotiVaikoIrasus(state.viewingChildId, nauji);
+  if (ok) { state.childExpenses = nauji; showToast("Įrašas ištrintas"); render(); }
+}
+function startEditChildExpense(expId) { state.editingChildExpenseId = expId; render(); }
+function cancelEditChildExpense() { state.editingChildExpenseId = null; render(); }
+async function saveEditChildExpense(expId) {
+  const amountEl = document.getElementById(`child_exp_amount_${expId}`);
+  const catEl = document.getElementById(`child_exp_cat_${expId}`);
+  const naujaSuma = parseFloat((amountEl.value || "0").replace(",", "."));
+  if (isNaN(naujaSuma) || naujaSuma <= 0) { showToast("Neteisinga suma."); return; }
+  const naujaKategorija = (catEl.value || "").trim() || "Kita";
+  const nauji = state.childExpenses.map(e => e.id === expId ? { ...e, amount: naujaSuma, category: naujaKategorija } : e);
+  const ok = await issaugotiVaikoIrasus(state.viewingChildId, nauji);
+  if (ok) { state.childExpenses = nauji; state.editingChildExpenseId = null; showToast("Įrašas atnaujintas"); render(); }
+}
+function renderChildExpensesPanel() {
+  if (state.childExpenses === null) return `<div style="font-size:12px;color:var(--faint);padding:8px 0;">Kraunama...</div>`;
+  const list = state.childExpenses.slice().sort((a,b) => (b.date||"").localeCompare(a.date||"")).slice(0, 30);
+  if (list.length === 0) return `<div style="font-size:12px;color:var(--faint);padding:8px 0;">Įrašų dar nėra.</div>`;
+  return `<div style="margin-top:8px;border-top:1px solid rgba(237,234,224,0.08);padding-top:6px;">
+    ${list.map(e => state.editingChildExpenseId === e.id ? `
+      <div style="display:flex;gap:6px;align-items:center;padding:6px 0;">
+        <input id="child_exp_amount_${e.id}" type="text" inputmode="decimal" value="${e.amount}" style="width:70px;font-size:12px;padding:4px 6px;" />
+        <input id="child_exp_cat_${e.id}" type="text" value="${escapeHtml(e.category||'')}" style="flex:1;min-width:0;font-size:12px;padding:4px 6px;" />
+        <button type="button" onclick="saveEditChildExpense('${e.id}')" class="icon-btn" style="color:var(--green);" aria-label="Išsaugoti">${ICONS.check}</button>
+        <button type="button" onclick="cancelEditChildExpense()" class="icon-btn" aria-label="Atšaukti">${ICONS.x}</button>
+      </div>
+    ` : `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;gap:8px;">
+        <div style="min-width:0;">
+          <div style="font-size:13px;">${escapeHtml(e.category||'—')}</div>
+          <div style="font-size:11px;color:var(--faint);">${escapeHtml(e.date||'')}${e.note?' · '+escapeHtml(e.note):''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+          <span class="tape" style="font-size:13px;margin-right:2px;">€${fmt(e.amount)}</span>
+          <button type="button" onclick="startEditChildExpense('${e.id}')" class="icon-btn" aria-label="Redaguoti">${ICONS.pencil}</button>
+          <button type="button" onclick="deleteChildExpense('${e.id}')" class="icon-btn" style="color:var(--red,#D97742);" aria-label="Trinti">${ICONS.trash}</button>
+        </div>
+      </div>
+    `).join("")}
+  </div>`;
+}
 function renderFamily() {
   const info = state.familyInfo;
   return `<div class="topbar" style="display:flex;align-items:center;justify-content:space-between;">
@@ -3618,32 +3723,27 @@ function renderFamily() {
         </div>
       ` : ""}
       <div class="section-label" style="margin-top:18px;">Nariai</div>
-      <table style="width:100%;border-collapse:collapse;font-size:14px;">
-        <thead>
-          <tr style="border-bottom:1px solid rgba(237,234,224,0.15);">
-            <th style="text-align:left;padding:6px 4px;font-weight:500;color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:0.04em;">El. paštas</th>
-            <th style="text-align:right;padding:6px 4px;font-weight:500;color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:0.04em;">Rolė</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${info.nariai.map(n => `
-            <tr style="border-bottom:1px solid rgba(237,234,224,0.08);">
-              <td style="padding:8px 4px;">${escapeHtml(n.email)}${manoVartotojas && n.id === manoVartotojas.id ? ' <span style="color:var(--faint);font-size:11px;">(tu)</span>' : ''}</td>
-              <td style="padding:8px 4px;text-align:right;">
-                ${info.mano_role === "parent" && !(manoVartotojas && n.id === manoVartotojas.id) ? `
-                  <select onchange="setMemberRole(${n.id}, this.value)" style="font-size:12px;padding:4px 6px;border-radius:6px;border:1px solid ${n.role==='parent'?'var(--gold)':'var(--blue)'};background:${n.role==='parent'?'rgba(201,162,39,0.08)':'rgba(90,150,220,0.08)'};color:${n.role==='parent'?'var(--gold)':'var(--blue)'};">
-                    <option value="parent" ${n.role==='parent'?'selected':''}>Tėvas/mama</option>
-                    <option value="child" ${n.role==='child'?'selected':''}>Vaikas</option>
-                  </select>
-                ` : `
-                  <span class="cat-tag" style="${n.role==='parent'?'':'color:var(--blue);border-color:var(--blue);'}">${n.role === "parent" ? "Tėvas/mama" : "Vaikas"}</span>
-                `}
-              </td>
-            </tr>
-          `).join("")}
-        </tbody>
-      </table>
-      <div style="font-size:11px;color:var(--faint);margin-top:14px;">${info.mano_role === "parent" ? "Pasirink rolę iš sąrašo prie nario, kad ją pakeistum iš karto. Kaip tėvas/mama matai visų vaikų duomenis; vaikų sąsaja rodo mažiau informacijos (be ataskaitų ir taisyklių)." : "Matai tik savo duomenis — paprastesnėje, vaikams pritaikytoje sąsajoje."}</div>
+      ${info.nariai.map(n => `
+        <div style="padding:10px 0;border-bottom:1px solid rgba(237,234,224,0.08);">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+            <span style="font-size:14px;">${escapeHtml(n.email)}${manoVartotojas && n.id === manoVartotojas.id ? ' <span style="color:var(--faint);font-size:11px;">(tu)</span>' : ''}</span>
+            ${info.mano_role === "parent" ? `
+              <div style="display:flex;gap:6px;flex-shrink:0;">
+                <button type="button" onclick="setMemberRole(${n.id},'parent')" style="padding:5px 10px;border-radius:8px;font-size:11px;border:1px solid ${n.role==='parent'?'var(--gold)':'rgba(237,234,224,0.15)'};background:${n.role==='parent'?'rgba(201,162,39,0.15)':'transparent'};color:${n.role==='parent'?'var(--gold)':'var(--faint)'};">Tėvas/mama</button>
+                <button type="button" onclick="setMemberRole(${n.id},'child')" style="padding:5px 10px;border-radius:8px;font-size:11px;border:1px solid ${n.role==='child'?'var(--blue)':'rgba(237,234,224,0.15)'};background:${n.role==='child'?'rgba(111,163,191,0.15)':'transparent'};color:${n.role==='child'?'var(--blue)':'var(--faint)'};">Vaikas</button>
+              </div>
+            ` : `<span class="cat-tag" style="${n.role==='parent'?'':'color:var(--blue);border-color:var(--blue);'}">${n.role === "parent" ? "Tėvas/mama" : "Vaikas"}</span>`}
+          </div>
+          ${info.mano_role === "parent" && n.role === "child" ? `
+            <button type="button" onclick="toggleViewChildExpenses(${n.id})" style="margin-top:8px;font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid rgba(237,234,224,0.15);background:transparent;color:var(--faint);">${state.viewingChildId === n.id ? 'Slėpti įrašus ▴' : 'Peržiūrėti / redaguoti įrašus ▾'}</button>
+            ${state.viewingChildId === n.id ? renderChildExpensesPanel() : ""}
+          ` : ""}
+          ${info.mano_role === "parent" ? `
+            <button type="button" onclick="removeMember(${n.id})" style="margin-top:8px;margin-left:8px;font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid ${state.confirmRemoveMemberId===n.id?'var(--red,#D97742)':'rgba(237,234,224,0.1)'};background:${state.confirmRemoveMemberId===n.id?'rgba(217,119,66,0.1)':'transparent'};color:${state.confirmRemoveMemberId===n.id?'var(--red,#D97742)':'var(--faint)'};">${state.confirmRemoveMemberId===n.id ? 'Tikrai pašalinti?' : 'Pašalinti iš šeimos'}</button>
+          ` : ""}
+        </div>
+      `).join("")}
+      <div style="font-size:11px;color:var(--faint);margin-top:14px;">${info.mano_role === "parent" ? "Kaip tėvas/mama gali keisti nario rolę, peržiūrėti bei koreguoti vaiko įrašus, arba pašalinti narį iš šeimos." : "Matai tik savo duomenis — paprastesnėje, vaikams pritaikytoje sąsajoje."}</div>
     ` : `
       <p style="font-size:13px;color:var(--faint);margin-bottom:18px;">Susikurk šeimą arba prisijunk prie esamos su kvietimo kodu.</p>
       <label class="field">Sukurti naują šeimą<input id="family_name_input" type="text" placeholder="Pvz. Tamašauskų šeima" /></label>
