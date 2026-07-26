@@ -80,9 +80,9 @@
   .toggle-btn.active { border-color: var(--gold); background: rgba(201,162,39,0.15); color: var(--gold); }
   .toggle-btn.active.blue { border-color: var(--blue); background: rgba(111,163,191,0.15); color: var(--blue); }
   .submit-btn { padding: 13px 0; border-radius: 10px; border: none; background: var(--gold); color: var(--ink); font-weight: 600; font-size: 15px; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; }
-  .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-top: 1px solid rgba(237,234,224,0.1); display: flex; justify-content: space-around; padding: 8px 4px calc(8px + env(safe-area-inset-bottom)); max-width: 480px; margin: 0 auto; }
-  .nav-item { display: flex; flex-direction: column; align-items: center; gap: 2px; background: none; border: none; color: var(--faint); font-size: 10px; padding: 4px 6px; }
-  .nav-item.active { color: var(--gold); }
+  .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--rv-bg); border-top: 1px solid var(--rv-line); display: flex; justify-content: space-around; padding: 8px 4px calc(8px + env(safe-area-inset-bottom)); max-width: 480px; margin: 0 auto; }
+  .nav-item { display: flex; flex-direction: column; align-items: center; gap: 2px; background: none; border: none; color: var(--rv-faint); font-size: 10px; padding: 6px 10px; border-radius: 12px; transition: background .15s ease, color .15s ease; }
+  .nav-item.active { color: var(--rv-accent); background: rgba(124,92,252,0.14); }
   .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
   .stat-card { background: var(--surface-light); border-radius: 10px; padding: 12px 14px; min-width: 0; }
   .stat-label { font-size: 11px; color: var(--faint); margin-bottom: 4px; }
@@ -145,6 +145,25 @@
   .rv-overview .expense-row { color: var(--rv-text); }
   .rv-overview input#search_input { background: var(--rv-surface); border-color: var(--rv-line); border-radius: 12px; color: var(--rv-text); }
   .rv-overview .empty { color: var(--rv-faint); }
+
+  /* --- Pridėti ekranas (rv-add) — pakartotinai naudoja tuos pačius rv-* žetonus,
+     bet paprasčiau: perrašo bendrus kintamuosius (--ink/--paper/--faint/--gold/--surface)
+     tik šio konteinerio viduje, todėl dauguma bendrų klasių (input, select, .submit-btn,
+     .toggle-btn ir t.t.) automatiškai atrodo teisingai be atskirų taisyklių kiekvienai. */
+  .rv-add {
+    background: var(--rv-bg);
+    --ink: var(--rv-bg); --surface: var(--rv-surface); --surface-light: var(--rv-surface);
+    --paper: var(--rv-text); --faint: var(--rv-faint); --gold: var(--rv-accent);
+  }
+  .rv-add .topbar { border-bottom-color: var(--rv-line); }
+  .rv-add input, .rv-add select { border-color: var(--rv-line); border-radius: 12px; }
+  .rv-add .subtabs { background: var(--rv-surface); border-radius: 14px; padding: 4px; gap: 4px; }
+  .rv-add .subtab-btn { border: none; border-radius: 10px; }
+  .rv-add .subtab-btn.active { background: var(--rv-accent); color: #0B0B0E; }
+  .rv-add .toggle-btn { border-color: var(--rv-line); border-radius: 12px; }
+  .rv-add .toggle-btn.active { background: rgba(124,92,252,0.16); }
+  .rv-add .submit-btn { border-radius: 14px; }
+  .rv-add .checkbox-field input[type="checkbox"] { accent-color: var(--rv-accent); }
 </style>
 </head>
 <body>
@@ -1851,7 +1870,7 @@ function renderAdd() {
 
   if (!isExpense || editingIncome) {
     const inc = editingIncome;
-    return `<div class="topbar"><div class="eyebrow">${inc?"Redaguoti pajamas":"Naujas įrašas"}</div></div>
+    return `<div class="rv-add"><div class="topbar"><div class="eyebrow">${inc?"Redaguoti pajamas":"Naujas įrašas"}</div></div>
     <div class="tabpanel fade-in">${subtabs}${errorBox}
       <form class="stack" onsubmit="return submitIncome(event)">
         <label class="field">Suma (€)<input id="i_amount" type="text" inputmode="decimal" placeholder="0,00" value="${inc?String(inc.amount).replace('.', ','):''}" /></label>
@@ -1864,11 +1883,11 @@ function renderAdd() {
           ${inc?`<button type="button" class="submit-btn" style="background:var(--surface-light);color:var(--paper);flex:0 0 auto;width:auto;padding:0 18px;" onclick="cancelEdit()">Atšaukti</button>`:""}
         </div>
       </form>
-    </div>`;
+    </div></div>`;
   }
 
   const exp = editingExpense;
-  return `<div class="topbar"><div class="eyebrow">${exp?"Redaguoti išlaidą":"Naujas įrašas"}</div></div>
+  return `<div class="rv-add"><div class="topbar"><div class="eyebrow">${exp?"Redaguoti išlaidą":"Naujas įrašas"}</div></div>
   <div class="tabpanel fade-in">${subtabs}${errorBox}
     <form class="stack" onsubmit="return submitAdd(event)">
       <label class="field">Suma (€)<input id="f_amount" type="text" inputmode="decimal" placeholder="0,00" value="${exp?String(exp.amount).replace('.', ','):''}" /></label>
@@ -1903,7 +1922,7 @@ function renderAdd() {
         ${exp?`<button type="button" class="submit-btn" style="background:var(--surface-light);color:var(--paper);flex:0 0 auto;width:auto;padding:0 18px;" onclick="cancelEdit()">Atšaukti</button>`:""}
       </div>
     </form>
-  </div>`;
+  </div></div>`;
 }
 function cancelEdit() {
   state.editingExpenseId = null; state.editingIncomeId = null; state.formError = null;
