@@ -794,6 +794,7 @@ let state = {
   reportYear: new Date().getFullYear(),
   reportCursor: null,
   showFamily: false,
+  showFinanceRules: false,
   familyInfo: null,
   confirmRemoveMemberId: null,
   viewingChildId: null,
@@ -2675,7 +2676,7 @@ function renderRules() {
   const targetFund = avgEssential * 3;
   const fundPct = targetFund > 0 ? Math.min(100, (state.savingsBalance / targetFund) * 100) : 0;
 
-  return `<div class="topbar"><div class="eyebrow">Finansų taisyklės</div></div>
+  return `<div class="topbar" style="display:flex;align-items:center;justify-content:space-between;"><div class="eyebrow">Taisyklės ir skaičiuoklės</div><button class="icon-btn" onclick="state.showFinanceRules=false;render();" aria-label="Uždaryti">${ICONS.x}</button></div>
   <div class="tabpanel fade-in">
 
     <div class="section-label">Biudžeto taisyklės</div>
@@ -3157,55 +3158,6 @@ function renderMonthlyReport() {
     ${top3.length ? top3.map((c,i)=>`<div class="ledger-row" style="display:flex;justify-content:space-between;padding:8px 0;font-size:14px;"><span>${i+1}. ${c}</span><span class="tape">€${fmt(d.byCategory[c])}</span></div>`).join("") : `<div class="empty">Nėra duomenų šiam mėnesiui.</div>`}`;
 }
 function renderFinance() {
-  const recurringRows = state.recurringTemplates.map(t => {
-    if (state.editingRecurringId === t.id) {
-      return `<div class="ledger-row" style="padding:10px 0;">
-        <div style="display:flex;gap:6px;margin-bottom:6px;">
-          <input id="rec_edit_amount" type="text" inputmode="decimal" value="${t.amount}" style="flex:1;" />
-          <select id="rec_edit_category" style="flex:1;">${state.categories.filter(c=>catType(c)!=="investment").map(c=>`<option value="${c}" ${t.category===c?'selected':''}>${c}</option>`).join("")}</select>
-        </div>
-        <input id="rec_edit_note" type="text" value="${escapeHtml(t.note||'')}" placeholder="Pastaba" style="margin-bottom:6px;" />
-        <div style="display:flex;gap:8px;">
-          <button class="icon-btn" style="color:var(--gold)" onclick="confirmEditRecurring('${t.id}')">${ICONS.check}</button>
-          <button class="icon-btn" onclick="state.editingRecurringId=null;render();">${ICONS.x}</button>
-        </div>
-      </div>`;
-    }
-    return `
-    <div class="ledger-row" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;font-size:13px;">
-      <span>${catEmoji(t.category)}${escapeHtml(t.category)}${t.note?` · ${escapeHtml(t.note)}`:""}</span>
-      <span style="display:flex;align-items:center;gap:8px;">
-        <span class="tape">€${fmt(t.amount)}/mėn.</span>
-        <button class="icon-btn" onclick="state.editingRecurringId='${t.id}';render();" aria-label="Redaguoti">${ICONS.pencil}</button>
-        <button class="icon-btn" style="color:var(--rust);" onclick="deleteRecurringTemplate('${t.id}')" aria-label="Ištrinti pasikartojančią išlaidą">${ICONS.trash}</button>
-      </span>
-    </div>`;
-  }).join("");
-
-  const recurringIncomeRows = state.recurringIncomes.map(t => {
-    if (state.editingRecurringIncomeId === t.id) {
-      return `<div class="ledger-row" style="padding:10px 0;">
-        <div style="display:flex;gap:6px;margin-bottom:6px;">
-          <input id="recinc_edit_amount" type="text" inputmode="decimal" value="${t.amount}" style="flex:1;" />
-          <input id="recinc_edit_label" type="text" value="${escapeHtml(t.label||'')}" placeholder="Pavadinimas" style="flex:1;" />
-        </div>
-        <div style="display:flex;gap:8px;">
-          <button class="icon-btn" style="color:var(--gold)" onclick="confirmEditRecurringIncome('${t.id}')">${ICONS.check}</button>
-          <button class="icon-btn" onclick="state.editingRecurringIncomeId=null;render();">${ICONS.x}</button>
-        </div>
-      </div>`;
-    }
-    return `
-    <div class="ledger-row" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;font-size:13px;">
-      <span style="color:var(--green);">↑ ${escapeHtml(t.label)}</span>
-      <span style="display:flex;align-items:center;gap:8px;">
-        <span class="tape">€${fmt(t.amount)}/mėn.</span>
-        <button class="icon-btn" onclick="state.editingRecurringIncomeId='${t.id}';render();" aria-label="Redaguoti">${ICONS.pencil}</button>
-        <button class="icon-btn" style="color:var(--rust);" onclick="deleteRecurringIncome('${t.id}')" aria-label="Ištrinti pasikartojančią pajamą">${ICONS.trash}</button>
-      </span>
-    </div>`;
-  }).join("");
-
   const holdingRows = state.holdings.map(h => {
     if (state.editingHoldingId === h.id) {
       return `<div class="ledger-row" style="padding:10px 0;">
@@ -3270,14 +3222,7 @@ function renderFinance() {
     </div>`;
   }).join("");
 
-  const exportDays = daysSinceExport();
-  const exportReminder = exportDays === null
-    ? `<div style="font-size:12px;color:var(--gold);margin-top:8px;">Dar niekada nedarei atsarginės kopijos — rekomenduojame tai padaryti dabar.</div>`
-    : exportDays > 30
-      ? `<div style="font-size:12px;color:var(--gold);margin-top:8px;">Paskutinį kartą eksportavai prieš ${exportDays} d. — vertėtų atnaujinti kopiją.</div>`
-      : `<div style="font-size:12px;color:var(--faint);margin-top:8px;">Paskutinį kartą eksportuota prieš ${exportDays} d.</div>`;
-
-  return `<div class="topbar"><div class="eyebrow">Finansai ir importas</div></div>
+  return `<div class="topbar"><div class="eyebrow">Investicijos</div></div>
   <div class="tabpanel fade-in">
 
     ${state.pendingApprovals && state.pendingApprovals.length > 0 ? `
@@ -3291,58 +3236,6 @@ function renderFinance() {
         `).join("")}
       </div>
     ` : ""}
-    ${settingsSectionHeader('recurexp', 'Pasikartojančios išlaidos', state.recurringTemplates.length ? `${state.recurringTemplates.length} šablon(ai/ų) · €${fmt(state.recurringTemplates.reduce((s,t)=>s+Number(t.amount),0))}/mėn.` : 'Nėra pridėtų')}
-    <div class="settings-collapse ${state.settingsExpanded['recurexp']?'expanded':''}">
-    ${recurringRows || `<div class="empty">Nėra pasikartojančių išlaidų.</div>`}
-    <form class="stack" style="margin-top:12px;" onsubmit="return submitAddRecurring(event)">
-      <div style="display:flex;gap:8px;">
-        <input id="rec_amount" type="text" inputmode="decimal" placeholder="Suma €" style="flex:1;" />
-        <select id="rec_category" style="flex:1;">${state.categories.filter(c=>catType(c)!=="investment").map(c=>`<option value="${c}">${c}</option>`).join("")}</select>
-      </div>
-      <input id="rec_note" type="text" placeholder="Pastaba (pvz. Nuoma, Netflix)" />
-      <button type="submit" class="submit-btn">${ICONS.plus} Pridėti pasikartojančias išlaidas</button>
-    </form>
-    <div style="font-size:12px;color:var(--faint);margin-top:8px;">Kiekvieno mėnesio 1 dieną automatiškai pridedama kaip išlaida.</div>
-    </div>
-
-    ${settingsSectionHeader('subscan', 'Galimos prenumeratos', state.detectedSubscriptions.length ? `${state.detectedSubscriptions.length} rasta` : 'Ieškoti pasikartojančių mokėjimų')}
-    <div class="settings-collapse ${state.settingsExpanded['subscan']?'expanded':''}">
-    <div style="font-size:11px;color:var(--faint);margin-bottom:10px;">Peržiūri tavo išlaidų istoriją ir suranda mokėjimus, kurie kartojasi tą pačią sumą bent 3 skirtingus mėnesius, bet dar nepaversti į pasikartojančias.</div>
-    <button type="button" class="submit-btn" style="background:var(--surface-light);color:var(--paper);margin-bottom:10px;" onclick="runSubscriptionScan()">Ieškoti pasikartojančių mokėjimų</button>
-    ${state.detectedSubscriptions.map((c,idx) => `
-      <div class="ledger-row" style="padding:8px 0;">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <span style="font-size:13px;">${catEmoji(c.category)}${escapeHtml(c.category)}${c.note?` · ${escapeHtml(c.note)}`:""}</span>
-          <span class="tape" style="font-size:13px;">€${fmt(c.amount)}/mėn.</span>
-        </div>
-        <div style="font-size:11px;color:var(--faint);margin-top:2px;margin-bottom:6px;">Aptikta ${c.months} mėn.</div>
-        <div style="display:flex;gap:8px;">
-          <button type="button" class="submit-btn" style="padding:6px 0;font-size:12px;" onclick="convertDetectedToRecurring(${idx})">Paversti į pasikartojančią</button>
-          <button type="button" class="submit-btn" style="background:var(--surface-light);color:var(--paper);flex:0 0 auto;width:auto;padding:6px 14px;font-size:12px;" onclick="dismissDetectedSubscription(${idx})">Ne, ačiū</button>
-        </div>
-      </div>`).join("")}
-    </div>
-
-    ${settingsSectionHeader('recurinc', 'Pasikartojančios pajamos', state.recurringIncomes.length ? `${state.recurringIncomes.length} šablon(ai/ų)` : 'Nėra pridėtų')}
-    <div class="settings-collapse ${state.settingsExpanded['recurinc']?'expanded':''}">
-    ${recurringIncomeRows || `<div class="empty">Nėra pasikartojančių pajamų.</div>`}
-    <form class="stack" style="margin-top:12px;" onsubmit="return submitAddRecurringIncome(event)">
-      <div style="display:flex;gap:8px;">
-        <input id="recinc_amount" type="text" inputmode="decimal" placeholder="Suma €" style="flex:1;" />
-        <input id="recinc_label" type="text" placeholder="Pavadinimas (pvz. Alga)" style="flex:1;" />
-      </div>
-      <button type="submit" class="submit-btn" style="background:var(--green);">${ICONS.plus} Pridėti pasikartojančias pajamas</button>
-    </form>
-    <div style="font-size:12px;color:var(--faint);margin-top:8px;">Kiekvieno mėnesio 1 dieną automatiškai pridedama kaip pajama (pvz. pastovi alga).</div>
-    </div>
-
-    ${settingsSectionHeader('bankimport', 'Banko išrašo importas', 'Įkelti CSV failą')}
-    <div class="settings-collapse ${state.settingsExpanded['bankimport']?'expanded':''}">
-    <label class="submit-btn" style="background:var(--blue);color:var(--ink);text-align:center;">
-      ${ICONS.plus} Importuoti CSV failą<input type="file" accept=".csv,.txt,text/csv,text/plain,*/*" style="display:none;" onchange="handleCsvFile(this)" />
-    </label>
-    <div style="font-size:12px;color:var(--faint);margin-top:8px;">Įkelk iš banko atsisiųstą CSV išrašą — programėlė pasiūlys stulpelių atitikmenis ir kategorijas, tu peržiūri prieš patvirtindamas.</div>
-    </div>
 
     ${settingsSectionHeader('stocks', 'Investicijų portfelis', state.holdings.length ? `${state.holdings.length} laikym(ai/ų)` : 'Nėra pridėtų')}
     <div class="settings-collapse ${state.settingsExpanded['stocks']?'expanded':''}">
@@ -3387,26 +3280,32 @@ function renderFinance() {
     <button type="button" class="submit-btn" style="background:var(--surface-light);color:var(--paper);" ${state.cryptoPriceRefreshing?'disabled':''} onclick="refreshCryptoPrices()">${state.cryptoPriceRefreshing ? "Atnaujinama…" : "Atnaujinti kripto kainas"}</button>
     </div>
 
-    ${settingsSectionHeader('backup', 'Atsarginė kopija', 'Eksportuoti / importuoti duomenis')}
-    <div class="settings-collapse ${state.settingsExpanded['backup']?'expanded':''}">
-    <div style="display:flex;gap:8px;">
-      <button type="button" class="submit-btn" style="background:var(--surface-light);color:var(--paper);" onclick="exportData()">Eksportuoti</button>
-      <label class="submit-btn" style="background:var(--surface-light);color:var(--paper);text-align:center;">
-        Importuoti<input type="file" accept="application/json" style="display:none;" onchange="importDataFile(this)" />
-      </label>
+    <div class="section-label" style="margin-top:22px;">Skolos, taisyklės ir skaičiuoklės</div>
+    <div class="card" style="cursor:pointer;" onclick="state.showFinanceRules=true;render();">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-weight:600;margin-bottom:2px;">Peržiūrėti visas taisykles ir skaičiuokles</div>
+          <div class="faint">Skolų strategija, avarinis fondas, 50/30/20, pirkinio skaičiuoklė ir kt.</div>
+        </div>
+        <span class="faint">›</span>
+      </div>
     </div>
-    ${exportReminder}
-    <button type="button" class="submit-btn" style="background:var(--surface-light);color:var(--paper);margin-top:8px;" onclick="exportCSV()">Eksportuoti CSV (Excel/Sheets)</button>
-    </div>
+  </div>`;
+}
+function renderSavingsGoals() {
+  const monthKey = currentMonthKey();
+  const d = monthData(monthKey, "budget");
+  const goalCats = state.categories.filter(c => catType(c) === "savingsgoal");
+  const perGoal = goalCats.map(c => ({ c, net: netSavingsGoalAmount(c) }));
+  const allocated = perGoal.reduce((s,g) => s + g.net, 0);
+  const unallocated = Math.max(0, state.savingsBalance - allocated);
 
-    ${settingsSectionHeader('budgetday', 'Mano biudžeto mėnuo', `Prasideda ${state.budgetStartDay || 1} d.`)}
-    <div class="settings-collapse ${state.settingsExpanded['budgetday']?'expanded':''}">
-    <div class="field-row">
-      <span class="field-row-label">Prasideda mėnesio dieną</span>
-      <div class="field-row-input"><input type="number" min="1" max="28" value="${state.budgetStartDay || 1}" onchange="updateBudgetStartDay(this.value)" /></div>
-    </div>
-    <div class="field-row-hint">Jei algą gauni ne 1-ą dieną (pvz. 15-ą), nustatyk tą dieną — Apžvalga rodys tavo asmeninį mėnesį, o Ataskaitoje galėsi rinktis tarp jo ir kalendorinio.</div>
-    </div>
+  return `<div class="topbar"><div class="eyebrow">Taupymas</div></div>
+  <div class="tabpanel fade-in">
+
+    <div class="section-label">Taupymo tikslai</div>
+    <div style="font-size:12px;color:var(--faint);margin-bottom:12px;">Norėdamas prisidėti prie tikslo, pridėk išlaidą su ta pačia kategorija skiltyje „Pridėti".</div>
+    ${goalCats.length ? goalCats.map(c => catRow(c, monthKey, d, "budget", false)).join("") : `<div class="empty">Dar nesukūrei taupymo tikslo. Sukurk jį Bendros skilties nustatymuose (kategorijų valdymas).</div>`}
 
     ${settingsSectionHeader('savingscfg', 'Santaupos', `€${fmt(state.savingsBalance)}`)}
     <div class="settings-collapse ${state.settingsExpanded['savingscfg']?'expanded':''}">
@@ -3439,32 +3338,72 @@ function renderFinance() {
         ${keys.map(k => `<div class="ledger-row" style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;"><span>${escapeHtml(k)}</span><span class="tape">€${fmt(groups[k])}</span></div>`).join("")}`;
     })()}
 
-    ${(() => {
-      const goalCats = state.categories.filter(c => catType(c) === "savingsgoal");
-      if (goalCats.length === 0) return "";
-      const perGoal = goalCats.map(c => ({ c, net: netSavingsGoalAmount(c) }));
-      const allocated = perGoal.reduce((s,g) => s + g.net, 0);
-      const unallocated = Math.max(0, state.savingsBalance - allocated);
-      return `<div class="section-label" style="margin-top:16px;">Kaip išskaidyta santaupų suma</div>
-        <div style="font-size:11px;color:var(--faint);margin-bottom:8px;">Jei visas santaupas laikai vienoje sąskaitoje, čia matai, kiek iš tos sumos „priklauso” kiekvienam tikslui.</div>
-        ${perGoal.map(g => `<div class="ledger-row" style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;"><span>${catEmoji(g.c)}${escapeHtml(g.c)}</span><span class="tape" style="color:var(--gold);">€${fmt(g.net)}</span></div>`).join("")}
-        <div class="ledger-row" style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-top:1px solid rgba(237,234,224,0.08);margin-top:4px;">
-          <span>Nepriskirta</span><span class="tape" style="color:var(--faint);">€${fmt(unallocated)}</span>
-        </div>`;
-    })()}
-    </div>
-
-    ${settingsSectionHeader('incomebase', 'Pajamų bazė (proporcingam biudžetui)', state.baseIncome ? `€${fmt(state.baseIncome)}/mėn.` : 'Išjungta')}
-    <div class="settings-collapse ${state.settingsExpanded['incomebase']?'expanded':''}">
-    <div class="field-row">
-      <span class="field-row-label">Bazinis mėnesio atlyginimas</span>
-      <div class="field-row-input"><span style="color:var(--faint)">€</span><input type="text" inputmode="decimal" value="${state.baseIncome || ''}" placeholder="pvz. 1000" onchange="updateBaseIncome(this.value)" /></div>
-    </div>
-    <div class="field-row-hint">Kai pajamos skiriasi nuo šios sumos, „lanksčių” kategorijų biudžetai automatiškai proporcingai padidėja arba sumažėja. „Būtinos” kategorijos (pvz. sąskaitos) nesikeičia. 0 = išjungta.</div>
+    ${goalCats.length ? `<div class="section-label" style="margin-top:16px;">Kaip išskaidyta santaupų suma</div>
+      <div style="font-size:11px;color:var(--faint);margin-bottom:8px;">Jei visas santaupas laikai vienoje sąskaitoje, čia matai, kiek iš tos sumos „priklauso” kiekvienam tikslui.</div>
+      ${perGoal.map(g => `<div class="ledger-row" style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;"><span>${catEmoji(g.c)}${escapeHtml(g.c)}</span><span class="tape" style="color:var(--gold);">€${fmt(g.net)}</span></div>`).join("")}
+      <div class="ledger-row" style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;border-top:1px solid rgba(237,234,224,0.08);margin-top:4px;">
+        <span>Nepriskirta</span><span class="tape" style="color:var(--faint);">€${fmt(unallocated)}</span>
+      </div>` : ""}
     </div>
   </div>`;
 }
 function renderSettings() {
+  const recurringRows = state.recurringTemplates.map(t => {
+    if (state.editingRecurringId === t.id) {
+      return `<div class="ledger-row" style="padding:10px 0;">
+        <div style="display:flex;gap:6px;margin-bottom:6px;">
+          <input id="rec_edit_amount" type="text" inputmode="decimal" value="${t.amount}" style="flex:1;" />
+          <select id="rec_edit_category" style="flex:1;">${state.categories.filter(c=>catType(c)!=="investment").map(c=>`<option value="${c}" ${t.category===c?'selected':''}>${c}</option>`).join("")}</select>
+        </div>
+        <input id="rec_edit_note" type="text" value="${escapeHtml(t.note||'')}" placeholder="Pastaba" style="margin-bottom:6px;" />
+        <div style="display:flex;gap:8px;">
+          <button class="icon-btn" style="color:var(--gold)" onclick="confirmEditRecurring('${t.id}')">${ICONS.check}</button>
+          <button class="icon-btn" onclick="state.editingRecurringId=null;render();">${ICONS.x}</button>
+        </div>
+      </div>`;
+    }
+    return `
+    <div class="ledger-row" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;font-size:13px;">
+      <span>${catEmoji(t.category)}${escapeHtml(t.category)}${t.note?` · ${escapeHtml(t.note)}`:""}</span>
+      <span style="display:flex;align-items:center;gap:8px;">
+        <span class="tape">€${fmt(t.amount)}/mėn.</span>
+        <button class="icon-btn" onclick="state.editingRecurringId='${t.id}';render();" aria-label="Redaguoti">${ICONS.pencil}</button>
+        <button class="icon-btn" style="color:var(--rust);" onclick="deleteRecurringTemplate('${t.id}')" aria-label="Ištrinti pasikartojančią išlaidą">${ICONS.trash}</button>
+      </span>
+    </div>`;
+  }).join("");
+
+  const recurringIncomeRows = state.recurringIncomes.map(t => {
+    if (state.editingRecurringIncomeId === t.id) {
+      return `<div class="ledger-row" style="padding:10px 0;">
+        <div style="display:flex;gap:6px;margin-bottom:6px;">
+          <input id="recinc_edit_amount" type="text" inputmode="decimal" value="${t.amount}" style="flex:1;" />
+          <input id="recinc_edit_label" type="text" value="${escapeHtml(t.label||'')}" placeholder="Pavadinimas" style="flex:1;" />
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="icon-btn" style="color:var(--gold)" onclick="confirmEditRecurringIncome('${t.id}')">${ICONS.check}</button>
+          <button class="icon-btn" onclick="state.editingRecurringIncomeId=null;render();">${ICONS.x}</button>
+        </div>
+      </div>`;
+    }
+    return `
+    <div class="ledger-row" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;font-size:13px;">
+      <span style="color:var(--green);">↑ ${escapeHtml(t.label)}</span>
+      <span style="display:flex;align-items:center;gap:8px;">
+        <span class="tape">€${fmt(t.amount)}/mėn.</span>
+        <button class="icon-btn" onclick="state.editingRecurringIncomeId='${t.id}';render();" aria-label="Redaguoti">${ICONS.pencil}</button>
+        <button class="icon-btn" style="color:var(--rust);" onclick="deleteRecurringIncome('${t.id}')" aria-label="Ištrinti pasikartojančią pajamą">${ICONS.trash}</button>
+      </span>
+    </div>`;
+  }).join("");
+
+  const exportDays = daysSinceExport();
+  const exportReminder = exportDays === null
+    ? `<div style="font-size:12px;color:var(--gold);margin-top:8px;">Dar niekada nedarei atsarginės kopijos — rekomenduojame tai padaryti dabar.</div>`
+    : exportDays > 30
+      ? `<div style="font-size:12px;color:var(--gold);margin-top:8px;">Paskutinį kartą eksportavai prieš ${exportDays} d. — vertėtų atnaujinti kopiją.</div>`
+      : `<div style="font-size:12px;color:var(--faint);margin-top:8px;">Paskutinį kartą eksportuota prieš ${exportDays} d.</div>`;
+
   const rows = state.categories.map((c, idx) => {
     const catT = catType(c);
     const isInv = catT === "investment";
@@ -3649,6 +3588,90 @@ function renderSettings() {
       <summary style="cursor:pointer;font-size:13px;">💻 Kompiuteris (Chrome / Edge)</summary>
       <div style="font-size:12px;color:var(--faint);margin:8px 0 4px;">1. Atsidaryk šį puslapį per Chrome ar Edge.<br>2. Adreso juostoje, dešinėje pusėje, ieškok įdiegimo ženkliuko (ekranas su ↓ rodykle).<br>3. Paspausk ir patvirtink „Įdiegti”.<br>4. Programėlė atsidarys atskirame lange, kaip įprasta darbalaukio programa, ir atsiras Pradžios meniu / Dock.</div>
     </details>
+
+    <div class="section-label" style="margin-top:22px;">Duomenys</div>
+    ${settingsSectionHeader('recurexp', 'Pasikartojančios išlaidos', state.recurringTemplates.length ? `${state.recurringTemplates.length} šablon(ai/ų) · €${fmt(state.recurringTemplates.reduce((s,t)=>s+Number(t.amount),0))}/mėn.` : 'Nėra pridėtų')}
+    <div class="settings-collapse ${state.settingsExpanded['recurexp']?'expanded':''}">
+    ${recurringRows || `<div class="empty">Nėra pasikartojančių išlaidų.</div>`}
+    <form class="stack" style="margin-top:12px;" onsubmit="return submitAddRecurring(event)">
+      <div style="display:flex;gap:8px;">
+        <input id="rec_amount" type="text" inputmode="decimal" placeholder="Suma €" style="flex:1;" />
+        <select id="rec_category" style="flex:1;">${state.categories.filter(c=>catType(c)!=="investment").map(c=>`<option value="${c}">${c}</option>`).join("")}</select>
+      </div>
+      <input id="rec_note" type="text" placeholder="Pastaba (pvz. Nuoma, Netflix)" />
+      <button type="submit" class="submit-btn">${ICONS.plus} Pridėti pasikartojančias išlaidas</button>
+    </form>
+    <div style="font-size:12px;color:var(--faint);margin-top:8px;">Kiekvieno mėnesio 1 dieną automatiškai pridedama kaip išlaida.</div>
+    </div>
+
+    ${settingsSectionHeader('subscan', 'Galimos prenumeratos', state.detectedSubscriptions.length ? `${state.detectedSubscriptions.length} rasta` : 'Ieškoti pasikartojančių mokėjimų')}
+    <div class="settings-collapse ${state.settingsExpanded['subscan']?'expanded':''}">
+    <div style="font-size:11px;color:var(--faint);margin-bottom:10px;">Peržiūri tavo išlaidų istoriją ir suranda mokėjimus, kurie kartojasi tą pačią sumą bent 3 skirtingus mėnesius, bet dar nepaversti į pasikartojančias.</div>
+    <button type="button" class="submit-btn" style="background:var(--surface-light);color:var(--paper);margin-bottom:10px;" onclick="runSubscriptionScan()">Ieškoti pasikartojančių mokėjimų</button>
+    ${state.detectedSubscriptions.map((c,idx) => `
+      <div class="ledger-row" style="padding:8px 0;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:13px;">${catEmoji(c.category)}${escapeHtml(c.category)}${c.note?` · ${escapeHtml(c.note)}`:""}</span>
+          <span class="tape" style="font-size:13px;">€${fmt(c.amount)}/mėn.</span>
+        </div>
+        <div style="font-size:11px;color:var(--faint);margin-top:2px;margin-bottom:6px;">Aptikta ${c.months} mėn.</div>
+        <div style="display:flex;gap:8px;">
+          <button type="button" class="submit-btn" style="padding:6px 0;font-size:12px;" onclick="convertDetectedToRecurring(${idx})">Paversti į pasikartojančią</button>
+          <button type="button" class="submit-btn" style="background:var(--surface-light);color:var(--paper);flex:0 0 auto;width:auto;padding:6px 14px;font-size:12px;" onclick="dismissDetectedSubscription(${idx})">Ne, ačiū</button>
+        </div>
+      </div>`).join("")}
+    </div>
+
+    ${settingsSectionHeader('recurinc', 'Pasikartojančios pajamos', state.recurringIncomes.length ? `${state.recurringIncomes.length} šablon(ai/ų)` : 'Nėra pridėtų')}
+    <div class="settings-collapse ${state.settingsExpanded['recurinc']?'expanded':''}">
+    ${recurringIncomeRows || `<div class="empty">Nėra pasikartojančių pajamų.</div>`}
+    <form class="stack" style="margin-top:12px;" onsubmit="return submitAddRecurringIncome(event)">
+      <div style="display:flex;gap:8px;">
+        <input id="recinc_amount" type="text" inputmode="decimal" placeholder="Suma €" style="flex:1;" />
+        <input id="recinc_label" type="text" placeholder="Pavadinimas (pvz. Alga)" style="flex:1;" />
+      </div>
+      <button type="submit" class="submit-btn" style="background:var(--green);">${ICONS.plus} Pridėti pasikartojančias pajamas</button>
+    </form>
+    <div style="font-size:12px;color:var(--faint);margin-top:8px;">Kiekvieno mėnesio 1 dieną automatiškai pridedama kaip pajama (pvz. pastovi alga).</div>
+    </div>
+
+    ${settingsSectionHeader('bankimport', 'Banko išrašo importas', 'Įkelti CSV failą')}
+    <div class="settings-collapse ${state.settingsExpanded['bankimport']?'expanded':''}">
+    <label class="submit-btn" style="background:var(--blue);color:var(--ink);text-align:center;">
+      ${ICONS.plus} Importuoti CSV failą<input type="file" accept=".csv,.txt,text/csv,text/plain,*/*" style="display:none;" onchange="handleCsvFile(this)" />
+    </label>
+    <div style="font-size:12px;color:var(--faint);margin-top:8px;">Įkelk iš banko atsisiųstą CSV išrašą — programėlė pasiūlys stulpelių atitikmenis ir kategorijas, tu peržiūri prieš patvirtindamas.</div>
+    </div>
+
+    ${settingsSectionHeader('backup', 'Atsarginė kopija', 'Eksportuoti / importuoti duomenis')}
+    <div class="settings-collapse ${state.settingsExpanded['backup']?'expanded':''}">
+    <div style="display:flex;gap:8px;">
+      <button type="button" class="submit-btn" style="background:var(--surface-light);color:var(--paper);" onclick="exportData()">Eksportuoti</button>
+      <label class="submit-btn" style="background:var(--surface-light);color:var(--paper);text-align:center;">
+        Importuoti<input type="file" accept="application/json" style="display:none;" onchange="importDataFile(this)" />
+      </label>
+    </div>
+    ${exportReminder}
+    <button type="button" class="submit-btn" style="background:var(--surface-light);color:var(--paper);margin-top:8px;" onclick="exportCSV()">Eksportuoti CSV (Excel/Sheets)</button>
+    </div>
+
+    ${settingsSectionHeader('budgetday', 'Mano biudžeto mėnuo', `Prasideda ${state.budgetStartDay || 1} d.`)}
+    <div class="settings-collapse ${state.settingsExpanded['budgetday']?'expanded':''}">
+    <div class="field-row">
+      <span class="field-row-label">Prasideda mėnesio dieną</span>
+      <div class="field-row-input"><input type="number" min="1" max="28" value="${state.budgetStartDay || 1}" onchange="updateBudgetStartDay(this.value)" /></div>
+    </div>
+    <div class="field-row-hint">Jei algą gauni ne 1-ą dieną (pvz. 15-ą), nustatyk tą dieną — Apžvalga rodys tavo asmeninį mėnesį, o Ataskaitoje galėsi rinktis tarp jo ir kalendorinio.</div>
+    </div>
+
+    ${settingsSectionHeader('incomebase', 'Pajamų bazė (proporcingam biudžetui)', state.baseIncome ? `€${fmt(state.baseIncome)}/mėn.` : 'Išjungta')}
+    <div class="settings-collapse ${state.settingsExpanded['incomebase']?'expanded':''}">
+    <div class="field-row">
+      <span class="field-row-label">Bazinis mėnesio atlyginimas</span>
+      <div class="field-row-input"><span style="color:var(--faint)">€</span><input type="text" inputmode="decimal" value="${state.baseIncome || ''}" placeholder="pvz. 1000" onchange="updateBaseIncome(this.value)" /></div>
+    </div>
+    <div class="field-row-hint">Kai pajamos skiriasi nuo šios sumos, „lanksčių” kategorijų biudžetai automatiškai proporcingai padidėja arba sumažėja. „Būtinos” kategorijos (pvz. sąskaitos) nesikeičia. 0 = išjungta.</div>
+    </div>
 
     <div class="section-label" style="margin-top:22px;">Paskyra</div>
     <button type="button" onclick="atsijungti()" style="width:100%;padding:12px;border-radius:8px;border:1px solid rgba(217,119,66,0.4);background:transparent;color:var(--red, #D97742);font-size:14px;">Atsijungti</button>
@@ -4457,6 +4480,7 @@ function render() {
   if (state.showRolloverPrompt) { app.innerHTML = renderRolloverPrompt(); return; }
   if (state.showHelp) { app.innerHTML = renderHelp(); return; }
   if (state.showFamily) { app.innerHTML = renderFamily(); return; }
+  if (state.showFinanceRules) { app.innerHTML = renderRules(); return; }
   if (state.showWrapped) { app.innerHTML = renderWrapped(); return; }
   if (state.importStep === "mapping") { app.innerHTML = renderImportMapping(); return; }
   if (state.importStep === "review") { app.innerHTML = renderImportReview(); return; }
@@ -4472,7 +4496,7 @@ function render() {
   if (state.tab === "overview") body = renderOverview();
   else if (state.tab === "add") body = renderAdd();
   else if (state.tab === "report" && !esuVaikas) body = renderReport();
-  else if (state.tab === "rules" && !esuVaikas) body = renderRules();
+  else if (state.tab === "rules" && !esuVaikas) body = renderSavingsGoals();
   else if (state.tab === "vaikoataskaita" && esuVaikas) body = renderVaikoAtaskaita();
   else if (state.tab === "finance") body = renderFinance();
   else if (state.tab === "settings") body = renderSettings();
