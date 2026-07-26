@@ -164,6 +164,17 @@
   .rv-add .toggle-btn.active { background: rgba(124,92,252,0.16); }
   .rv-add .submit-btn { border-radius: 14px; }
   .rv-add .checkbox-field input[type="checkbox"] { accent-color: var(--rv-accent); }
+
+  /* --- Nustatymų mygtukas (plaukiojantis, viršuje dešinėje, visuose ekranuose) --- */
+  .rv-settings-fab {
+    position: fixed; top: calc(14px + env(safe-area-inset-top)); right: 16px; z-index: 20;
+    width: 38px; height: 38px; border-radius: 50%;
+    background: rgba(24,24,29,0.85); backdrop-filter: blur(6px);
+    border: 1px solid var(--rv-line); color: var(--rv-faint);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .rv-settings-fab:active { color: var(--rv-accent); border-color: var(--rv-accent); }
+  @media (min-width: 481px) { .rv-settings-fab { right: calc(50% - 240px + 16px); } }
 </style>
 </head>
 <body>
@@ -1941,7 +1952,7 @@ function attachTabSwipe() {
   if (tabSwipeAttached) return;
   tabSwipeAttached = true;
   const app = document.getElementById("app");
-  const order = ["overview", "add", "report", "rules", "finance", "settings"];
+  const order = ["overview", "add", "rules", "finance", "report"];
   let startX = 0, startY = 0, dragging = false, locked = false;
   app.addEventListener("touchstart", (e) => {
     if (state.appPin && state.appLocked) { dragging = false; return; }
@@ -4468,14 +4479,14 @@ function render() {
   else body = renderOverview();
 
   app.innerHTML = body + `
+    <button class="rv-settings-fab" onclick="setTab('settings')" aria-label="Nustatymai">${ICONS.settings}</button>
     <div class="bottom-nav">
-      <button class="nav-item ${state.tab==='overview'?'active':''}" onclick="setTab('overview')">${ICONS.wallet}Apžvalga</button>
+      <button class="nav-item ${state.tab==='overview'?'active':''}" onclick="setTab('overview')">${ICONS.wallet}Bendra</button>
       <button class="nav-item ${state.tab==='add'?'active':''}" onclick="setTab('add')">${ICONS.plus}Pridėti</button>
-      ${!esuVaikas ? `<button class="nav-item ${state.tab==='report'?'active':''}" onclick="setTab('report')">${ICONS.file}Ataskaita</button>` : ''}
-      ${!esuVaikas ? `<button class="nav-item ${state.tab==='rules'?'active':''}" onclick="setTab('rules')">${ICONS.rules}Taisyklės</button>` : ''}
+      ${!esuVaikas ? `<button class="nav-item ${state.tab==='rules'?'active':''}" onclick="setTab('rules')">${ICONS.rules}Taupymas</button>` : ''}
       ${esuVaikas ? `<button class="nav-item ${state.tab==='vaikoataskaita'?'active':''}" onclick="setTab('vaikoataskaita')">${ICONS.file}Mano diena</button>` : ''}
-      <button class="nav-item ${state.tab==='finance'?'active':''}" onclick="setTab('finance')">${ICONS.finance}Finansai</button>
-      <button class="nav-item ${state.tab==='settings'?'active':''}" onclick="setTab('settings')">${ICONS.settings}Nustatymai</button>
+      <button class="nav-item ${state.tab==='finance'?'active':''}" onclick="setTab('finance')">${ICONS.finance}Investicijos</button>
+      ${!esuVaikas ? `<button class="nav-item ${state.tab==='report'?'active':''}" onclick="setTab('report')">${ICONS.file}Suvestinė</button>` : ''}
     </div>`;
 
   if (state.tab === "overview") attachSwipeHandlers();
