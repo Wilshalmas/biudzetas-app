@@ -17,6 +17,8 @@
   :root {
     --ink: #1B2420; --surface: #22302A; --surface-light: #2A3B33; --paper: #EDEAE0;
     --gold: #C9A227; --green: #6FBF73; --rust: #D97742; --faint: #8FA098; --blue: #6FA3BF;
+    --rv-bg: #0B0B0E; --rv-surface: #18181D; --rv-line: rgba(255,255,255,0.08);
+    --rv-text: #F5F5F7; --rv-faint: #86868D; --rv-accent: #7C5CFC; --rv-radius: 20px;
   }
   :root.theme-light {
     --ink: #F4F1E8; --surface: #E9E4D6; --surface-light: #DED7C4; --paper: #262E28;
@@ -109,6 +111,40 @@
   .subtab-btn { flex: 1; padding: 8px 0; border-radius: 8px; border: 1px solid rgba(237,234,224,0.15); background: transparent; color: var(--faint); font-size: 13px; }
   .subtab-btn.active { border-color: var(--gold); color: var(--gold); background: rgba(201,162,39,0.1); }
   .report-month-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+
+  /* ================================================================
+     Revolut-style redesign PREVIEW — scoped to .rv-overview only.
+     Nothing here touches other screens; every rule below is either a
+     new .rv-* class or an ".rv-overview <existing-class>" override
+     that only applies inside this one screen's wrapper.
+     ================================================================ */
+  .rv-overview { background: var(--rv-bg); }
+  .rv-hero { padding: 30px 20px 24px; }
+  .rv-eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--rv-faint); margin-bottom: 16px; }
+  .rv-balance-wrap { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+  .rv-balance { font-family: 'IBM Plex Sans', sans-serif; font-weight: 800; font-size: 44px; letter-spacing: -0.02em; color: var(--rv-text); font-variant-numeric: tabular-nums; line-height: 1; }
+  .rv-balance-of { font-size: 14px; color: var(--rv-faint); }
+  .rv-progress-track { height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; margin-bottom: 22px; }
+  .rv-progress-fill { height: 100%; border-radius: 3px; background: var(--rv-accent); transition: width .4s ease; }
+  .rv-pills { display: flex; gap: 8px; overflow-x: auto; margin: 0 -20px; padding: 0 20px 4px; -webkit-overflow-scrolling: touch; }
+  .rv-pill { flex-shrink: 0; background: var(--rv-surface); border: 1px solid var(--rv-line); border-radius: 14px; padding: 10px 14px; min-width: 118px; }
+  .rv-pill-label { display: block; font-size: 10px; color: var(--rv-faint); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+  .rv-pill-value { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 600; color: var(--rv-text); }
+  .rv-note { font-size: 11.5px; color: var(--rv-faint); margin-top: 10px; }
+  .rv-warning { display: flex; gap: 8px; align-items: center; background: rgba(217,119,66,0.12); border-radius: 12px; padding: 10px 12px; margin-top: 10px; color: var(--rust); font-size: 12.5px; }
+  .rv-warning.amber { background: rgba(201,162,39,0.12); color: var(--gold); }
+
+  .rv-overview .tabpanel { padding: 4px 20px 20px; }
+  .rv-overview .section-label { color: var(--rv-faint); }
+  .rv-overview .chart-wrap { background: var(--rv-surface); border: 1px solid var(--rv-line); border-radius: var(--rv-radius); padding: 18px; margin-bottom: 18px; }
+  .rv-overview .legend { color: var(--rv-faint); }
+  .rv-overview .cat-line { padding: 9px 0; }
+  .rv-overview .cat-name { color: var(--rv-text); }
+  .rv-overview .bar-track { background: rgba(255,255,255,0.08); }
+  .rv-overview .ledger-row { border-bottom-color: var(--rv-line); }
+  .rv-overview .expense-row { color: var(--rv-text); }
+  .rv-overview input#search_input { background: var(--rv-surface); border-color: var(--rv-line); border-radius: 12px; color: var(--rv-text); }
+  .rv-overview .empty { color: var(--rv-faint); }
 </style>
 </head>
 <body>
@@ -1618,42 +1654,41 @@ function renderOverview() {
     </div>`
   ).join("") : `<div class="empty">${q || state.categoryFilter ? "Pagal filtrą nieko nerasta." : "Šį mėnesį įrašų nėra."}</div>`;
 
-  return `
-  ${state.dataIntegrityWarning ? `<div style="background:rgba(216,88,88,0.15);border:1px solid var(--rust);border-radius:10px;padding:12px 14px;margin-bottom:14px;">
+  return `<div class="rv-overview">
+  ${state.dataIntegrityWarning ? `<div style="background:rgba(216,88,88,0.15);border:1px solid var(--rust);border-radius:10px;padding:12px 14px;margin:0 20px 14px;">
     <div style="color:var(--rust);font-weight:600;font-size:13px;margin-bottom:4px;">⚠️ Aptikta pažeistų duomenų</div>
-    <div style="font-size:12px;color:var(--faint);margin-bottom:8px;">Kai kurie saugoti duomenys (${state.dataIntegrityWarning.join(", ")}) buvo neteisingo formato ir nebuvo įkelti — programėlė naudoja saugius numatytuosius nustatymus tose vietose. Jei turi atsarginę kopiją, rekomenduojame ją atkurti (Finansai → Atsarginė kopija).</div>
-    <button type="button" class="submit-btn" style="padding:6px 0;font-size:12px;background:var(--surface-light);color:var(--paper);" onclick="state.dataIntegrityWarning=null;render();">Supratau, paslėpti</button>
+    <div style="font-size:12px;color:var(--rv-faint);margin-bottom:8px;">Kai kurie saugoti duomenys (${state.dataIntegrityWarning.join(", ")}) buvo neteisingo formato ir nebuvo įkelti — programėlė naudoja saugius numatytuosius nustatymus tose vietose. Jei turi atsarginę kopiją, rekomenduojame ją atkurti (Finansai → Atsarginė kopija).</div>
+    <button type="button" class="submit-btn" style="padding:6px 0;font-size:12px;background:var(--rv-surface);color:var(--rv-text);" onclick="state.dataIntegrityWarning=null;render();">Supratau, paslėpti</button>
   </div>` : ""}
-  <div class="header">
-    <div class="eyebrow" style="text-align:center;">Sąskaitų knyga</div>
-    <div class="display" style="font-size:20px;font-weight:600;text-align:center;margin-bottom:14px;">${periodLabel(monthKey, "budget")}</div>
-    <div class="total-row">
-      <span class="tape total-num" style="color:${over ? 'var(--rust)' : 'var(--paper)'}">€${fmt(d.spentTotal)}</span>
-      <span style="color:var(--faint);font-size:14px;">/ €${fmt(d.budgetTotal)} biudžeto</span>
+  <div class="rv-hero">
+    <div class="rv-eyebrow">Sąskaitų knyga · ${periodLabel(monthKey, "budget")}</div>
+    <div class="rv-balance-wrap">
+      <span class="rv-balance" style="color:${over ? 'var(--rust)' : 'var(--rv-text)'}">€${fmt(d.spentTotal)}</span>
+      <span class="rv-balance-of">/ €${fmt(d.budgetTotal)} biudžeto</span>
     </div>
-    <div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:${over ? 'var(--rust)' : 'var(--gold)'}"></div></div>
-    <div class="income-line">
-      <span>Pajamos: <b>€${fmt(d.incomeTotal)}</b></span>
-      <span>Investuota: <b style="color:var(--blue)">€${fmt(d.investedTotal)}</b></span>
-      <span>Taupymo tikslai: <b style="color:var(--gold)">€${fmt(d.savingsGoalTotal)}</b></span>
-      <span>Santaupos: <b style="color:${state.savingsBalance<0?'var(--rust)':'var(--gold)'}">€${fmt(state.savingsBalance)}</b></span>
+    <div class="rv-progress-track"><div class="rv-progress-fill" style="width:${pct}%;background:${over ? 'var(--rust)' : 'var(--rv-accent)'}"></div></div>
+    <div class="rv-pills">
+      <div class="rv-pill"><span class="rv-pill-label">Pajamos</span><span class="rv-pill-value">€${fmt(d.incomeTotal)}</span></div>
+      <div class="rv-pill"><span class="rv-pill-label">Investuota</span><span class="rv-pill-value" style="color:var(--blue)">€${fmt(d.investedTotal)}</span></div>
+      <div class="rv-pill"><span class="rv-pill-label">Taupymo tikslai</span><span class="rv-pill-value" style="color:var(--rv-accent)">€${fmt(d.savingsGoalTotal)}</span></div>
+      <div class="rv-pill"><span class="rv-pill-label">Santaupos</span><span class="rv-pill-value" style="color:${state.savingsBalance<0?'var(--rust)':'var(--rv-accent)'}">€${fmt(state.savingsBalance)}</span></div>
     </div>
     ${d.incomeTotal > 0 ? (() => {
       const totalAllocated = d.spentTotal + d.investedTotal + d.savingsGoalTotal;
       const pctOfIncome = (totalAllocated / d.incomeTotal) * 100;
       const overIncome = totalAllocated > d.incomeTotal;
-      return `<div style="text-align:center;font-size:11px;margin-top:6px;color:${overIncome?'var(--rust)':'var(--faint)'};">Iš viso paskirstyta (išlaidos + investicijos + taupymas): €${fmt(totalAllocated)} — ${Math.round(pctOfIncome)}% pajamų${overIncome ? ' ⚠️ viršija pajamas' : ''}</div>`;
+      return `<div class="rv-note" style="${overIncome?'color:var(--rust);':''}">Iš viso paskirstyta (išlaidos + investicijos + taupymas): €${fmt(totalAllocated)} — ${Math.round(pctOfIncome)}% pajamų${overIncome ? ' ⚠️ viršija pajamas' : ''}</div>`;
     })() : ""}
-    ${d.savingsSpent > 0 ? `<div style="text-align:center;font-size:11px;color:var(--faint);margin-top:4px;">Iš jų €${fmt(d.savingsSpent)} apmokėta iš santaupų šį mėnesį (neįskaičiuota į biudžetą)</div>` : ""}
-    ${d.budgetTotal > 0 ? `<div style="text-align:center;font-size:11px;color:var(--faint);margin-top:6px;">Vidutiniškai €${fmt(avgDaily)}/d. · ${
+    ${d.savingsSpent > 0 ? `<div class="rv-note">Iš jų €${fmt(d.savingsSpent)} apmokėta iš santaupų šį mėnesį (neįskaičiuota į biudžetą)</div>` : ""}
+    ${d.budgetTotal > 0 ? `<div class="rv-note">Vidutiniškai €${fmt(avgDaily)}/d. · ${
       prog.remaining > 0
         ? (suggestedDaily >= 0 ? `liko €${fmt(suggestedDaily)}/d. (dar ${prog.remaining} d.)` : `viršyta €${fmt(Math.abs(suggestedDaily))}/d.`)
         : (remainingBudget >= 0 ? `paskutinė diena, liko €${fmt(remainingBudget)}` : `viršyta iš viso €${fmt(Math.abs(remainingBudget))}`)
     }</div>` : ""}
-    ${state.savingsGoalMin > 0 && state.savingsBalance < state.savingsGoalMin ? `<div class="over-warning">${ICONS.alert}<span>Santaupos (€${fmt(state.savingsBalance)}) žemiau nustatytos ribos (€${fmt(state.savingsGoalMin)})</span></div>` : ""}
-    ${d.overCategories.length ? `<div class="over-warning">${ICONS.alert}<span>Viršyta: ${d.overCategories.join(", ")}</span></div>` : ""}
-    ${d.underpaidLoans.length ? `<div class="over-warning">${ICONS.alert}<span>Nesumokėta min. įmoka: ${d.underpaidLoans.join(", ")}</span></div>` : ""}
-    ${d.nearingCategories.length ? `<div class="over-warning" style="color:var(--gold);">${ICONS.alert}<span>Artėji prie limito: ${d.nearingCategories.join(", ")}</span></div>` : ""}
+    ${state.savingsGoalMin > 0 && state.savingsBalance < state.savingsGoalMin ? `<div class="rv-warning">${ICONS.alert}<span>Santaupos (€${fmt(state.savingsBalance)}) žemiau nustatytos ribos (€${fmt(state.savingsGoalMin)})</span></div>` : ""}
+    ${d.overCategories.length ? `<div class="rv-warning">${ICONS.alert}<span>Viršyta: ${d.overCategories.join(", ")}</span></div>` : ""}
+    ${d.underpaidLoans.length ? `<div class="rv-warning">${ICONS.alert}<span>Nesumokėta min. įmoka: ${d.underpaidLoans.join(", ")}</span></div>` : ""}
+    ${d.nearingCategories.length ? `<div class="rv-warning amber">${ICONS.alert}<span>Artėji prie limito: ${d.nearingCategories.join(", ")}</span></div>` : ""}
   </div>
   <div class="tabpanel fade-in">
     ${state.gaugeStyle === "fuel"
@@ -1698,6 +1733,7 @@ function renderOverview() {
         </div>`
       ).join("")}
     ` : ""}
+  </div>
   </div>`;
 }
 
