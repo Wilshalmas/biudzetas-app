@@ -795,6 +795,7 @@ let state = {
   reportCursor: null,
   showFamily: false,
   showFinanceRules: false,
+  lastMainTab: "overview",
   familyInfo: null,
   confirmRemoveMemberId: null,
   viewingChildId: null,
@@ -3492,6 +3493,7 @@ function renderSettings() {
     <div style="display:flex;gap:8px;">
       <button class="icon-btn" onclick="state.showFamily=true;loadFamilyInfo();render();" aria-label="Šeimos paskyra" style="border:1px solid rgba(237,234,224,0.15);border-radius:14px;padding:5px 12px;font-size:12px;">${ICONS.family}</button>
       <button class="icon-btn" onclick="state.showHelp=true;render();" aria-label="Pagalba" style="border:1px solid rgba(237,234,224,0.15);border-radius:14px;padding:5px 12px;font-size:12px;">Pagalba</button>
+      <button class="icon-btn" onclick="setTab(state.lastMainTab||'overview')" aria-label="Uždaryti" style="border:1px solid rgba(237,234,224,0.15);border-radius:14px;padding:5px 10px;">${ICONS.x}</button>
     </div>
   </div>
   <div class="tabpanel fade-in">
@@ -4503,7 +4505,7 @@ function render() {
   else body = renderOverview();
 
   app.innerHTML = body + `
-    <button class="rv-settings-fab" onclick="setTab('settings')" aria-label="Nustatymai">${ICONS.settings}</button>
+    ${state.tab !== "settings" ? `<button class="rv-settings-fab" onclick="state.lastMainTab=state.tab;setTab('settings')" aria-label="Nustatymai">${ICONS.settings}</button>` : ""}
     <div class="bottom-nav">
       <button class="nav-item ${state.tab==='overview'?'active':''}" onclick="setTab('overview')">${ICONS.wallet}Bendra</button>
       <button class="nav-item ${state.tab==='add'?'active':''}" onclick="setTab('add')">${ICONS.plus}Pridėti</button>
