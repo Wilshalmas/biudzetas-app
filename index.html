@@ -1574,10 +1574,13 @@ function catRow(c, monthKey, d, mode, clickable) {
   const isLoan = type === "loan";
   let color, pct, amountLabel, subLine = "";
   if (isInv || isSavingsGoal) {
-    const target = d.investTarget(c);
-    color = statusColorInvestment(spent, target);
-    pct = target > 0 ? Math.min(100, (spent/target)*100) : (spent>0?100:0);
-    amountLabel = target > 0 ? `€${fmt(spent)} iš €${fmt(target)}` : `€${fmt(spent)}`;
+    const cfg = state.categoryConfig[c] || {};
+    const usesOverallGoal = isSavingsGoal && Number(cfg.targetAmount) > 0;
+    const target = usesOverallGoal ? Number(cfg.targetAmount) : d.investTarget(c);
+    const spentForBar = usesOverallGoal ? netSavingsGoalAmount(c) : spent;
+    color = statusColorInvestment(spentForBar, target);
+    pct = target > 0 ? Math.min(100, (spentForBar/target)*100) : (spentForBar>0?100:0);
+    amountLabel = target > 0 ? `€${fmt(spentForBar)} iš €${fmt(target)}` : `€${fmt(spentForBar)}`;
     if (isSavingsGoal) {
       const proj = requiredMonthlyForGoal(c);
       if (proj) subLine = proj.monthly !== null
@@ -1883,13 +1886,22 @@ function renderAdd() {
 
   if (!isExpense || editingIncome) {
     const inc = editingIncome;
+    const presetLabels = ["Atlyginimas", "Avansas", "Priedas", "Kitos pajamos"];
+    const incLabel = inc ? inc.label : "";
+    const isCustomLabel = inc && !presetLabels.includes(incLabel);
     return `<div class="rv-add"><div class="topbar"><div class="eyebrow">${inc?"Redaguoti pajamas":"Naujas įrašas"}</div></div>
     <div class="tabpanel fade-in">${subtabs}${errorBox}
       <form class="stack" onsubmit="return submitIncome(event)">
         <label class="field">Suma (€)<input id="i_amount" type="text" inputmode="decimal" placeholder="0,00" value="${inc?String(inc.amount).replace('.', ','):''}" /></label>
-        <label class="field">Pavadinimas<input id="i_label" type="text" placeholder="pvz. Atlyginimas, Avansas, Priedas" list="income_labels" value="${inc?escapeHtml(inc.label):''}" /></label>
-          <datalist id="income_labels"><option value="Atlyginimas"><option value="Avansas"><option value="Priedas"><option value="Kitos pajamos"></datalist>
+        <label class="field">Pavadinimas
+          <select id="i_label_select" onchange="document.getElementById('i_label_custom_wrap').style.display = this.value === '__custom__' ? 'block' : 'none';">
+            ${presetLabels.map(l => `<option value="${l}" ${incLabel===l?'selected':''}>${l}</option>`).join("")}
+            <option value="__custom__" ${isCustomLabel?'selected':''}>Kita (įvesk pati)...</option>
+          </select>
         </label>
+        <div id="i_label_custom_wrap" style="display:${isCustomLabel?'block':'none'};">
+          <input id="i_label" type="text" placeholder="Įvesk pavadinimą" value="${isCustomLabel?escapeHtml(incLabel):''}" />
+        </div>
         <label class="field">Data<input id="i_date" type="date" value="${inc?inc.date:new Date().toISOString().slice(0,10)}" /></label>
         <div style="display:flex;gap:8px;">
           <button type="submit" class="submit-btn" style="background:var(--green);flex:1;width:auto;">${inc?ICONS.check:ICONS.plus} ${inc?"Išsaugoti":"Įrašyti pajamas"}</button>
@@ -2093,7 +2105,11 @@ function submitIncome(ev) {
   }
   const date = document.getElementById("i_date").value;
   if (!date) { state.formError = "Pasirink datą."; render(); return false; }
-  const fields = { amount, label: document.getElementById("i_label").value.trim() || "Pajamos", date };
+  const selectVal = document.getElementById("i_label_select").value;
+  const label = selectVal === "__custom__"
+    ? (document.getElementById("i_label").value.trim() || "Pajamos")
+    : selectVal;
+  const fields = { amount, label, date };
   if (state.editingIncomeId) {
     const idx = state.incomes.findIndex(i => i.id === state.editingIncomeId);
     if (idx !== -1) state.incomes[idx] = { ...state.incomes[idx], ...fields };
@@ -3244,7 +3260,7 @@ function renderFinance() {
       <span class="field-row-label">Finnhub API raktas</span>
     </div>
     <input type="text" value="${escapeHtml(state.finnhubApiKey)}" placeholder="Įklijuok nemokamą raktą iš finnhub.io" onchange="updateFinnhubKey(this.value)" style="margin-bottom:6px;" />
-    <div style="font-size:11px;color:var(--faint);margin-bottom:14px;">Nemokamai gaunamas per finnhub.io (registracija el. paštu, be mokėjimo kortelės). Naudojamas tik kainoms gauti tiesiai iš tavo naršyklės.</div>
+    <div style="font-size:11px;color:var(--faint);margin-bottom:14px;">Nemokamai gaunamas per finnhub.io (registracija el. paštu, be mokėjimo kortelės). Naudojamas tik kainoms gauti tiesiai iš tavo naršyklės. <b>Svarbu:</b> nemokamas Finnhub planas palaiko tik JAV biržų (NYSE/NASDAQ) tickerius — Europos ar kitų biržų akcijos gali rodyti „nerasta" arba „be kainos duomenų".</div>
 
     ${holdingRows || `<div class="empty">Nėra pridėtų laikymų.</div>`}
     <form class="stack" style="margin-top:12px;" onsubmit="return submitAddHolding(event)">
