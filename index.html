@@ -19,6 +19,7 @@
     --gold: #C9A227; --green: #6FBF73; --rust: #D97742; --faint: #8FA098; --blue: #6FA3BF;
     --rv-bg: #0B0B0E; --rv-surface: #18181D; --rv-line: rgba(255,255,255,0.08);
     --rv-text: #F5F5F7; --rv-faint: #86868D; --rv-accent: #7C5CFC; --rv-radius: 20px;
+    --gold-tint: rgba(201,162,39,0.12);
   }
   :root.theme-light {
     --ink: #F4F1E8; --surface: #E9E4D6; --surface-light: #DED7C4; --paper: #262E28;
@@ -118,7 +119,11 @@
      new .rv-* class or an ".rv-overview <existing-class>" override
      that only applies inside this one screen's wrapper.
      ================================================================ */
-  .rv-overview { background: var(--rv-bg); }
+  .rv-overview {
+    background: var(--rv-bg);
+    min-height: 100vh;
+    --gold-tint: rgba(124,92,252,0.16);
+  }
   .rv-hero { padding: 30px 20px 24px; }
   .rv-eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--rv-faint); margin-bottom: 16px; }
   .rv-balance-wrap { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
@@ -152,8 +157,10 @@
      .toggle-btn ir t.t.) automatiškai atrodo teisingai be atskirų taisyklių kiekvienai. */
   .rv-add {
     background: var(--rv-bg);
+    min-height: 100vh;
     --ink: var(--rv-bg); --surface: var(--rv-surface); --surface-light: var(--rv-surface);
     --paper: var(--rv-text); --faint: var(--rv-faint); --gold: var(--rv-accent);
+    --gold-tint: rgba(124,92,252,0.16);
   }
   .rv-add .topbar { border-bottom-color: var(--rv-line); }
   .rv-add input, .rv-add select { border-color: var(--rv-line); border-radius: 12px; }
@@ -164,6 +171,30 @@
   .rv-add .toggle-btn.active { background: rgba(124,92,252,0.16); }
   .rv-add .submit-btn { border-radius: 14px; }
   .rv-add .checkbox-field input[type="checkbox"] { accent-color: var(--rv-accent); }
+
+  /* --- Bendra violetinės temos klasė, naudojama Taupymo/Investicijų/Suvestinės ekranuose.
+     Tas pats principas kaip .rv-add: perrašo kintamuosius, ne kiekvieną klasę atskirai. */
+  .rv-theme {
+    background: var(--rv-bg);
+    min-height: 100vh;
+    --ink: var(--rv-bg); --surface: var(--rv-surface); --surface-light: var(--rv-surface);
+    --paper: var(--rv-text); --faint: var(--rv-faint); --gold: var(--rv-accent);
+    --gold-tint: rgba(124,92,252,0.16);
+  }
+  .rv-theme .topbar { border-bottom-color: var(--rv-line); }
+  .rv-theme input, .rv-theme select { border-color: var(--rv-line); border-radius: 12px; }
+  .rv-theme .toggle-btn { border-color: var(--rv-line); border-radius: 12px; }
+  .rv-theme .toggle-btn.active { background: rgba(124,92,252,0.16); }
+  .rv-theme .toggle-btn.active.blue { background: rgba(111,163,191,0.16); }
+  .rv-theme .submit-btn { border-radius: 14px; }
+  .rv-theme .tip-card { background: var(--rv-surface); border-color: var(--rv-line); }
+  .rv-theme .ledger-row { border-bottom-color: var(--rv-line); }
+  .rv-theme .cat-tag { border-color: var(--rv-line); }
+  .rv-theme .bar-track { background: rgba(255,255,255,0.08); }
+  .rv-theme .settings-collapse { border-color: var(--rv-line); }
+  .rv-theme .empty { color: var(--rv-faint); }
+  .rv-theme .icon-btn { color: var(--rv-faint); }
+  .rv-theme summary { color: var(--rv-text); }
 
   /* --- Nustatymų mygtukas (plaukiojantis, viršuje dešinėje, visuose ekranuose) --- */
   .rv-settings-fab {
@@ -743,10 +774,14 @@ let state = {
   csvMappingMemory: load("csvMappingMemory", {}),
   holdings: load("holdings", []),
   finnhubApiKey: load("finnhubApiKey", ""),
+  stockPriceProvider: load("stockPriceProvider", "finnhub"),
+  twelveDataApiKey: load("twelveDataApiKey", ""),
   priceRefreshing: false,
   editingHoldingId: null,
   cryptoHoldings: load("cryptoHoldings", []),
   pendingApprovals: load("pendingApprovals", []),
+  investmentCashBalance: load("investmentCashBalance", 0),
+  showAllocInvestCash: false,
   editingCryptoId: null,
   cryptoPriceRefreshing: false,
   taxCalc: { income: "", method: "30pct", actualExpenses: "", otherIncome: "", insuredElsewhere: false, firstYearRelief: false },
@@ -1337,6 +1372,7 @@ function applyRecurringTemplates() {
     if (!exists) {
       state.expenses.unshift({ id: uid(), amount: t.amount, category: t.category, date: startDateStr, note: t.note, necessity: t.necessity, recurringId: t.id });
       if (catType(t.category) === "savingsgoal") { state.savingsBalance += Number(t.amount); save("savingsBalance", state.savingsBalance); }
+      if (catType(t.category) === "investment") { state.investmentCashBalance += Number(t.amount); save("investmentCashBalance", state.investmentCashBalance); }
       changed = true;
     }
   });
@@ -1385,6 +1421,7 @@ function removeExpense(id) {
   const item = state.expenses[idx];
   if (item.fromSavings) state.savingsBalance += Number(item.amount);
   if (catType(item.category) === "savingsgoal") state.savingsBalance -= Number(item.amount);
+  if (catType(item.category) === "investment") state.investmentCashBalance -= Number(item.amount);
   state.expenses.splice(idx, 1);
   lastDeleted = { type: "expense", data: item, idx };
   persistAll(); render();
@@ -1404,6 +1441,7 @@ function undoDelete() {
   if (lastDeleted.type === "expense") {
     if (lastDeleted.data.fromSavings) state.savingsBalance -= Number(lastDeleted.data.amount);
     if (catType(lastDeleted.data.category) === "savingsgoal") state.savingsBalance += Number(lastDeleted.data.amount);
+    if (catType(lastDeleted.data.category) === "investment") state.investmentCashBalance += Number(lastDeleted.data.amount);
     state.expenses.splice(lastDeleted.idx, 0, lastDeleted.data);
   } else {
     state.incomes.splice(lastDeleted.idx, 0, lastDeleted.data);
@@ -1608,19 +1646,24 @@ function catRow(c, monthKey, d, mode, clickable) {
   }
   const scaled = !isInv && !isSavingsGoal && !isLoan && !isEssential(c) && state.baseIncome > 0 && Math.abs(scaleFactorForMonth(monthKey, mode)-1) > 0.02;
   const isActive = state.categoryFilter === c;
-  const clickAttr = clickable ? `onclick="toggleCategoryFilter('${c}')" style="cursor:pointer;${isActive?'background:rgba(201,162,39,0.08);border-radius:8px;':''}"` : "";
+  const clickAttr = clickable ? `onclick="toggleCategoryFilter('${c}')" style="cursor:pointer;${isActive?'background:var(--gold-tint);border-radius:8px;':''}"` : "";
   return `<div class="ledger-row" ${clickAttr}>
     <div class="cat-line">
       <span class="cat-name"><span>${catEmoji(c)}${c}</span>${isInv?`<span class="cat-tag">Investicija</span>`:""}${isSavingsGoal?`<span class="cat-tag" style="color:var(--gold);border-color:var(--gold);">Taupymo tikslas</span>`:""}${isLoan?`<span class="cat-tag" style="color:var(--blue);border-color:var(--blue);">Paskola</span>`:""}${scaled?`<span class="scaled-tag">~pritaikyta</span>`:""}</span>
-      <span class="tape cat-amount" style="color:${color}">${amountLabel}</span>
+      <span class="tape cat-amount" style="color:${color}">${amountLabel}${clickable ? ` <span style="color:var(--faint);font-weight:400;">›</span>` : ""}</span>
     </div>
     <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div>
     ${subLine}
   </div>`;
 }
 function toggleCategoryFilter(c) {
-  state.categoryFilter = state.categoryFilter === c ? null : c;
+  const activating = state.categoryFilter !== c;
+  state.categoryFilter = activating ? c : null;
   render();
+  if (activating) {
+    const el = document.getElementById("menesio-irasai");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 }
 function renderOverview() {
   const monthKey = currentMonthKey();
@@ -1736,16 +1779,17 @@ function renderOverview() {
     </div>
     <div class="section-label" style="display:flex;justify-content:space-between;align-items:center;">
       <span>Pagal kategoriją <span style="text-transform:none;letter-spacing:0;color:var(--faint);font-size:11px;">(bakstelėk filtruoti)</span></span>
-      <span style="display:flex;gap:4px;">
-        <button type="button" onclick="setCategoryViewStyle('bars')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid ${state.categoryViewStyle!=='pie'?'var(--gold)':'rgba(237,234,224,0.15)'};background:${state.categoryViewStyle!=='pie'?'rgba(201,162,39,0.12)':'transparent'};color:${state.categoryViewStyle!=='pie'?'var(--gold)':'var(--faint)'};text-transform:none;letter-spacing:0;">Juostos</button>
-        <button type="button" onclick="setCategoryViewStyle('pie')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid ${state.categoryViewStyle==='pie'?'var(--gold)':'rgba(237,234,224,0.15)'};background:${state.categoryViewStyle==='pie'?'rgba(201,162,39,0.12)':'transparent'};color:${state.categoryViewStyle==='pie'?'var(--gold)':'var(--faint)'};text-transform:none;letter-spacing:0;">Pyragėlis</button>
+      <span style="display:flex;gap:4px;align-items:center;">
+        <button type="button" onclick="setCategoryViewStyle('bars')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid ${state.categoryViewStyle!=='pie'?'var(--gold)':'rgba(237,234,224,0.15)'};background:${state.categoryViewStyle!=='pie'?'var(--gold-tint)':'transparent'};color:${state.categoryViewStyle!=='pie'?'var(--gold)':'var(--faint)'};text-transform:none;letter-spacing:0;">Juostos</button>
+        <button type="button" onclick="setCategoryViewStyle('pie')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid ${state.categoryViewStyle==='pie'?'var(--gold)':'rgba(237,234,224,0.15)'};background:${state.categoryViewStyle==='pie'?'var(--gold-tint)':'transparent'};color:${state.categoryViewStyle==='pie'?'var(--gold)':'var(--faint)'};text-transform:none;letter-spacing:0;">Pyragėlis</button>
+        <button type="button" onclick="state.lastMainTab=state.tab;setTab('settings')" aria-label="Tvarkyti kategorijas" style="width:22px;height:22px;border-radius:50%;border:1px solid rgba(237,234,224,0.15);background:transparent;color:var(--faint);font-size:11px;display:flex;align-items:center;justify-content:center;">⚙</button>
       </span>
     </div>
     ${state.categoryViewStyle === "pie" ? `
       ${categoryPieSVG(d)}
       ${state.categories.filter(c => catType(c) !== "expense").map(c => catRow(c, monthKey, d, "budget", true)).join("")}
     ` : rows}
-    <div class="section-label" style="margin-top:22px;">Šio mėnesio įrašai</div>
+    <div class="section-label" id="menesio-irasai" style="margin-top:22px;">Šio mėnesio įrašai</div>
     ${filterChip}
     <input id="search_input" type="text" placeholder="Ieškoti (kategorija, pastaba)..." value="${state.searchQuery}" oninput="state.searchQuery=this.value;state._focusSearch=true;render();" style="margin-bottom:12px;" />
     ${itemRows}
@@ -2079,6 +2123,8 @@ function submitAdd(ev) {
       if (fromSavings) state.savingsBalance -= amount;
       if (catType(old.category) === "savingsgoal") state.savingsBalance -= Number(old.amount);
       if (catType(fields.category) === "savingsgoal") state.savingsBalance += amount;
+      if (catType(old.category) === "investment") state.investmentCashBalance -= Number(old.amount);
+      if (catType(fields.category) === "investment") state.investmentCashBalance += amount;
       state.expenses[idx] = { ...old, ...fields };
     }
     state.editingExpenseId = null;
@@ -2086,8 +2132,9 @@ function submitAdd(ev) {
   } else {
     if (fromSavings) state.savingsBalance -= amount;
     if (catType(fields.category) === "savingsgoal") state.savingsBalance += amount;
+    if (catType(fields.category) === "investment") state.investmentCashBalance += amount;
     state.expenses.unshift({ id: uid(), ...fields });
-    showToast(fromSavings ? "Išlaida įrašyta iš santaupų" : "Išlaida įrašyta");
+    showToast(fromSavings ? "Išlaida įrašyta iš santaupų" : catType(fields.category) === "investment" ? "Investuota suma pridėta prie investicinės sąskaitos" : "Išlaida įrašyta");
   }
   state.formError = null;
   const entryMonth = budgetMonthKeyForDate(date);
@@ -2131,8 +2178,8 @@ function renderReport() {
     <button type="button" class="toggle-btn ${state.reportMode!=='year'?'active':''}" onclick="state.reportMode='month';render();">Mėnuo</button>
     <button type="button" class="toggle-btn ${state.reportMode==='year'?'active':''}" onclick="state.reportMode='year';render();">Metai</button>
   </div>`;
-  if (state.reportMode === "year") return `<div class="tabpanel fade-in">${toggle}${renderYearlyReport()}</div>`;
-  return `<div class="tabpanel fade-in">${toggle}${renderMonthlyReport()}</div>`;
+  if (state.reportMode === "year") return `<div class="rv-theme"><div class="tabpanel fade-in">${toggle}${renderYearlyReport()}</div></div>`;
+  return `<div class="rv-theme"><div class="tabpanel fade-in">${toggle}${renderMonthlyReport()}</div></div>`;
 }
 
 function amortizedPayment(principal, annualRatePct, years) {
@@ -2303,22 +2350,37 @@ function confirmEditHolding(id) {
   persistAll(); render();
 }
 function updateFinnhubKey(val) { state.finnhubApiKey = val.trim(); persistAll(); }
+function updateTwelveDataKey(val) { state.twelveDataApiKey = val.trim(); persistAll(); }
+function updateStockPriceProvider(val) { state.stockPriceProvider = val; persistAll(); render(); }
 async function refreshHoldingPrices() {
-  if (!state.finnhubApiKey) { alert("Pirma įvesk Finnhub API raktą Nustatymuose (nemokamas, gaunamas per finnhub.io)."); return; }
+  const provider = state.stockPriceProvider || "finnhub";
+  const apiKey = provider === "twelvedata" ? state.twelveDataApiKey : state.finnhubApiKey;
+  const providerName = provider === "twelvedata" ? "Twelve Data" : "Finnhub";
+  if (!apiKey) { alert(`Pirma įvesk ${providerName} API raktą Nustatymuose.`); return; }
   if (state.holdings.length === 0) return;
   state.priceRefreshing = true; render();
   for (const h of state.holdings) {
     try {
-      const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(h.ticker)}&token=${encodeURIComponent(state.finnhubApiKey)}`);
-      if (!res.ok) { h.priceError = res.status === 401 ? "Neteisingas API raktas." : res.status === 429 ? "Viršytas užklausų limitas — pabandyk vėliau." : `Klaida (HTTP ${res.status})`; continue; }
-      const data = await res.json();
-      if (data && typeof data.c === "number" && data.c > 0) {
-        h.lastPrice = data.c; h.lastPriceAt = new Date().toISOString(); h.priceError = null;
+      if (provider === "twelvedata") {
+        const res = await fetch(`https://api.twelvedata.com/price?symbol=${encodeURIComponent(h.ticker)}&apikey=${encodeURIComponent(apiKey)}`);
+        const data = await res.json();
+        if (data && data.price && !isNaN(parseFloat(data.price))) {
+          h.lastPrice = parseFloat(data.price); h.lastPriceAt = new Date().toISOString(); h.priceError = null;
+        } else {
+          h.priceError = (data && data.message) ? data.message : "Tikslas nerastas arba be kainos duomenų.";
+        }
       } else {
-        h.priceError = "Tikslas nerastas arba be kainos duomenų.";
+        const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(h.ticker)}&token=${encodeURIComponent(apiKey)}`);
+        if (!res.ok) { h.priceError = res.status === 401 ? "Neteisingas API raktas." : res.status === 429 ? "Viršytas užklausų limitas — pabandyk vėliau." : `Klaida (HTTP ${res.status})`; continue; }
+        const data = await res.json();
+        if (data && typeof data.c === "number" && data.c > 0) {
+          h.lastPrice = data.c; h.lastPriceAt = new Date().toISOString(); h.priceError = null;
+        } else {
+          h.priceError = "Tikslas nerastas arba be kainos duomenų. Finnhub nemokamas planas palaiko tik JAV biržas — Europos tikslams (pvz. QDVE) pabandyk Twelve Data.";
+        }
       }
     } catch (err) {
-      h.priceError = "Nepavyko prisijungti prie Finnhub.";
+      h.priceError = `Nepavyko prisijungti prie ${providerName}.`;
     }
   }
   state.priceRefreshing = false;
@@ -2341,6 +2403,31 @@ function addCryptoHolding(coinId, units, invested) {
   else state.cryptoHoldings.push({ id: uid(), coinId: id, units: u, invested: inv, lastPrice: null, lastPriceAt: null, priceError: null });
   persistAll(); render();
   showToast(`„${id}“ pridėtas/atnaujintas`);
+}
+function allocateInvestmentCash() {
+  if (esuVaikoRoleje()) { showToast("Šią funkciją gali naudoti tik tėvai/mamos."); return; }
+  const target = document.getElementById("alloc_target").value;
+  const unitsRaw = document.getElementById("alloc_units").value;
+  const units = parseFloat(String(unitsRaw).replace(",", "."));
+  const amount = state.investmentCashBalance;
+  if (isNaN(units) || units <= 0) { showToast("Įvesk teisingą vienetų kiekį."); return; }
+
+  if (target === "__new__") {
+    const type = document.getElementById("alloc_new_type").value;
+    const tickerRaw = document.getElementById("alloc_new_ticker").value.trim();
+    if (!tickerRaw) { showToast("Įvesk tickerį arba CoinGecko ID."); return; }
+    state.investmentCashBalance = 0;
+    if (type === "stock") addHolding(tickerRaw, units, amount);
+    else addCryptoHolding(tickerRaw, units, amount);
+  } else {
+    const [type, id] = target.split(":");
+    state.investmentCashBalance = 0;
+    if (type === "stock") addHolding(id, units, amount);
+    else addCryptoHolding(id, units, amount);
+  }
+  state.showAllocInvestCash = false;
+  persistAll(); render();
+  showToast(`€${fmt(amount)} priskirta`);
 }
 function deleteCryptoHolding(id) {
   if (!confirm("Ištrinti šį laikymą?")) return;
@@ -2585,7 +2672,7 @@ function toggleSettingsSection(key) {
 }
 function settingsSectionHeader(key, title, summary) {
   const expanded = !!state.settingsExpanded[key];
-  return `<div onclick="toggleSettingsSection('${key}')" style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;cursor:pointer;border:1px solid ${expanded?'var(--gold)':'rgba(237,234,224,0.12)'};border-radius:10px;margin-bottom:8px;background:${expanded?'rgba(201,162,39,0.06)':'transparent'};transition:border-color .2s, background .2s;">
+  return `<div onclick="toggleSettingsSection('${key}')" style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;cursor:pointer;border:1px solid ${expanded?'var(--gold)':'rgba(237,234,224,0.12)'};border-radius:10px;margin-bottom:8px;background:${expanded?'var(--gold-tint)':'transparent'};transition:border-color .2s, background .2s;">
     <div>
       <div style="font-size:14px;font-weight:600;">${title}</div>
       ${summary ? `<div style="font-size:11px;color:var(--faint);margin-top:2px;">${summary}</div>` : ""}
@@ -2693,7 +2780,7 @@ function renderRules() {
   const targetFund = avgEssential * 3;
   const fundPct = targetFund > 0 ? Math.min(100, (state.savingsBalance / targetFund) * 100) : 0;
 
-  return `<div class="topbar" style="display:flex;align-items:center;justify-content:space-between;"><div class="eyebrow">Taisyklės ir skaičiuoklės</div><button class="icon-btn" onclick="state.showFinanceRules=false;render();" aria-label="Uždaryti">${ICONS.x}</button></div>
+  return `<div class="rv-theme"><div class="topbar" style="display:flex;align-items:center;justify-content:space-between;"><div class="eyebrow">Taisyklės ir skaičiuoklės</div><button class="icon-btn" onclick="state.showFinanceRules=false;render();" aria-label="Uždaryti">${ICONS.x}</button></div>
   <div class="tabpanel fade-in">
 
     <div class="section-label">Biudžeto taisyklės</div>
@@ -3009,13 +3096,13 @@ function renderWrapped() {
   const year = state.reportYear;
   const w = computeWrappedStats(year);
   const card = (emoji, label, value, sub, color) => `
-    <div style="background:linear-gradient(135deg, rgba(201,162,39,0.12), rgba(111,163,191,0.08));border:1px solid rgba(237,234,224,0.1);border-radius:16px;padding:22px;margin-bottom:14px;text-align:center;">
+    <div style="background:linear-gradient(135deg, rgba(124,92,252,0.16), rgba(111,163,191,0.08));border:1px solid rgba(237,234,224,0.1);border-radius:16px;padding:22px;margin-bottom:14px;text-align:center;">
       <div style="font-size:28px;margin-bottom:8px;">${emoji}</div>
       <div style="font-size:12px;color:var(--faint);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">${label}</div>
       <div class="tape" style="font-size:26px;font-weight:700;color:${color||'var(--gold)'};">${value}</div>
       ${sub ? `<div style="font-size:12px;color:var(--faint);margin-top:6px;">${sub}</div>` : ""}
     </div>`;
-  return `<div class="topbar" style="display:flex;align-items:center;justify-content:space-between;">
+  return `<div class="rv-theme"><div class="topbar" style="display:flex;align-items:center;justify-content:space-between;">
     <div class="eyebrow">${year} metų apžvalga</div>
     <button class="icon-btn" onclick="state.showWrapped=false;render();" aria-label="Uždaryti">${ICONS.x}</button>
   </div>
@@ -3031,6 +3118,7 @@ function renderWrapped() {
       ${card("📝", "Iš viso įrašų", `${w.entriesCount}`, "kiek kartų suvedei išlaidą ar pajamą")}
       ${card(w.overBudgetMonths===0?"✅":"📊", "Mėnesių viršyta biudžetą", `${w.overBudgetMonths} iš ${w.monthly.length}`, null, w.overBudgetMonths===0?"var(--green)":"var(--gold)")}
     `}
+  </div>
   </div>`;
 }
 function renderYearlyReport() {
@@ -3172,7 +3260,8 @@ function renderMonthlyReport() {
     ${state.categories.map(c => catRow(c, monthKey, d, mode)).join("")}
 
     <div class="section-label" style="margin-top:18px;">Daugiausiai leista</div>
-    ${top3.length ? top3.map((c,i)=>`<div class="ledger-row" style="display:flex;justify-content:space-between;padding:8px 0;font-size:14px;"><span>${i+1}. ${c}</span><span class="tape">€${fmt(d.byCategory[c])}</span></div>`).join("") : `<div class="empty">Nėra duomenų šiam mėnesiui.</div>`}`;
+    ${top3.length ? top3.map((c,i)=>`<div class="ledger-row" style="display:flex;justify-content:space-between;padding:8px 0;font-size:14px;"><span>${i+1}. ${c}</span><span class="tape">€${fmt(d.byCategory[c])}</span></div>`).join("") : `<div class="empty">Nėra duomenų šiam mėnesiui.</div>`}
+  </div>`;
 }
 function renderFinance() {
   const holdingRows = state.holdings.map(h => {
@@ -3239,7 +3328,7 @@ function renderFinance() {
     </div>`;
   }).join("");
 
-  return `<div class="topbar"><div class="eyebrow">Investicijos</div></div>
+  return `<div class="rv-theme"><div class="topbar"><div class="eyebrow">Investicijos</div></div>
   <div class="tabpanel fade-in">
 
     ${state.pendingApprovals && state.pendingApprovals.length > 0 ? `
@@ -3254,13 +3343,57 @@ function renderFinance() {
       </div>
     ` : ""}
 
+    ${state.investmentCashBalance > 0 ? `
+    <div class="section-label">Investicinė sąskaita</div>
+    <div class="tip-card" style="margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-weight:600;">💼 Nepriskirti pinigai</div>
+          <div style="font-size:12px;color:var(--faint);">Laukia priskyrimo konkrečiai akcijai/kriptai</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span class="tape" style="font-size:16px;">€${fmt(state.investmentCashBalance)}</span>
+          <button type="button" class="icon-btn" style="border:1px solid rgba(237,234,224,0.15);border-radius:14px;padding:5px 12px;font-size:12px;" onclick="state.showAllocInvestCash = !state.showAllocInvestCash; render();">${state.showAllocInvestCash ? "Uždaryti" : "Priskirti"}</button>
+        </div>
+      </div>
+      ${state.showAllocInvestCash ? `
+        <div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(237,234,224,0.1);">
+          <label class="field">Ką nusipirkai už šiuos €${fmt(state.investmentCashBalance)}?
+            <select id="alloc_target" onchange="document.getElementById('alloc_new_wrap').style.display = this.value === '__new__' ? 'block' : 'none';">
+              <option value="__new__">Nauja pozicija</option>
+              ${state.holdings.map(h => `<option value="stock:${h.ticker}">${h.ticker} (esama akcija)</option>`).join("")}
+              ${state.cryptoHoldings.map(h => `<option value="crypto:${h.coinId}">${h.coinId} (esama kripto)</option>`).join("")}
+            </select>
+          </label>
+          <div id="alloc_new_wrap">
+            <label class="field">Tipas
+              <select id="alloc_new_type"><option value="stock">Akcija</option><option value="crypto">Kripto</option></select>
+            </label>
+            <label class="field">Tikslas / CoinGecko ID<input id="alloc_new_ticker" type="text" placeholder="pvz. AAPL arba bitcoin" /></label>
+          </div>
+          <label class="field">Vienetų kiekis<input id="alloc_units" type="text" inputmode="decimal" placeholder="pvz. 2.5" /></label>
+          <button type="button" class="submit-btn" style="background:var(--blue);" onclick="allocateInvestmentCash()">Priskirti €${fmt(state.investmentCashBalance)}</button>
+        </div>
+      ` : ""}
+    </div>
+    ` : ""}
+
     ${settingsSectionHeader('stocks', 'Investicijų portfelis', state.holdings.length ? `${state.holdings.length} laikym(ai/ų)` : 'Nėra pridėtų')}
     <div class="settings-collapse ${state.settingsExpanded['stocks']?'expanded':''}">
     <div class="field-row">
-      <span class="field-row-label">Finnhub API raktas</span>
+      <span class="field-row-label">Kainų šaltinis</span>
     </div>
-    <input type="text" value="${escapeHtml(state.finnhubApiKey)}" placeholder="Įklijuok nemokamą raktą iš finnhub.io" onchange="updateFinnhubKey(this.value)" style="margin-bottom:6px;" />
-    <div style="font-size:11px;color:var(--faint);margin-bottom:14px;">Nemokamai gaunamas per finnhub.io (registracija el. paštu, be mokėjimo kortelės). Naudojamas tik kainoms gauti tiesiai iš tavo naršyklės. <b>Svarbu:</b> nemokamas Finnhub planas palaiko tik JAV biržų (NYSE/NASDAQ) tickerius — Europos ar kitų biržų akcijos gali rodyti „nerasta" arba „be kainos duomenų".</div>
+    <select onchange="updateStockPriceProvider(this.value)" style="margin-bottom:6px;">
+      <option value="finnhub" ${state.stockPriceProvider!=='twelvedata'?'selected':''}>Finnhub (tik JAV biržos — NYSE/NASDAQ)</option>
+      <option value="twelvedata" ${state.stockPriceProvider==='twelvedata'?'selected':''}>Twelve Data (Europa ir daugiau biržų)</option>
+    </select>
+    ${state.stockPriceProvider === "twelvedata" ? `
+      <input type="text" value="${escapeHtml(state.twelveDataApiKey)}" placeholder="Įklijuok nemokamą raktą iš twelvedata.com" onchange="updateTwelveDataKey(this.value)" style="margin-bottom:6px;" />
+      <div style="font-size:11px;color:var(--faint);margin-bottom:14px;">Nemokamai gaunamas per twelvedata.com. Padengia 50+ biržų, įskaitant Europos (pvz. XETRA — tinka tokiems tikslams kaip QDVE). Nemokamas planas: ~800 užklausų/dieną.</div>
+    ` : `
+      <input type="text" value="${escapeHtml(state.finnhubApiKey)}" placeholder="Įklijuok nemokamą raktą iš finnhub.io" onchange="updateFinnhubKey(this.value)" style="margin-bottom:6px;" />
+      <div style="font-size:11px;color:var(--faint);margin-bottom:14px;">Nemokamai gaunamas per finnhub.io (registracija el. paštu, be mokėjimo kortelės). <b>Svarbu:</b> nemokamas planas palaiko tik JAV biržų (NYSE/NASDAQ) tickerius — Europos akcijoms/ETF (pvz. QDVE) pasirink Twelve Data aukščiau.</div>
+    `}
 
     ${holdingRows || `<div class="empty">Nėra pridėtų laikymų.</div>`}
     <form class="stack" style="margin-top:12px;" onsubmit="return submitAddHolding(event)">
@@ -3298,15 +3431,16 @@ function renderFinance() {
     </div>
 
     <div class="section-label" style="margin-top:22px;">Skolos, taisyklės ir skaičiuoklės</div>
-    <div class="card" style="cursor:pointer;" onclick="state.showFinanceRules=true;render();">
+    <div class="tip-card" style="cursor:pointer;" onclick="state.showFinanceRules=true;render();">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <div>
           <div style="font-weight:600;margin-bottom:2px;">Peržiūrėti visas taisykles ir skaičiuokles</div>
-          <div class="faint">Skolų strategija, avarinis fondas, 50/30/20, pirkinio skaičiuoklė ir kt.</div>
+          <div style="color:var(--faint);font-size:12px;">Skolų strategija, avarinis fondas, 50/30/20, pirkinio skaičiuoklė ir kt.</div>
         </div>
-        <span class="faint">›</span>
+        <span style="color:var(--faint);">›</span>
       </div>
     </div>
+  </div>
   </div>`;
 }
 function renderSavingsGoals() {
@@ -3317,10 +3451,13 @@ function renderSavingsGoals() {
   const allocated = perGoal.reduce((s,g) => s + g.net, 0);
   const unallocated = Math.max(0, state.savingsBalance - allocated);
 
-  return `<div class="topbar"><div class="eyebrow">Taupymas</div></div>
+  return `<div class="rv-theme"><div class="topbar"><div class="eyebrow">Taupymas</div></div>
   <div class="tabpanel fade-in">
 
-    <div class="section-label">Taupymo tikslai</div>
+    <div class="section-label" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>Taupymo tikslai</span>
+      <button type="button" onclick="state.lastMainTab=state.tab;setTab('settings')" aria-label="Tvarkyti tikslus" style="width:22px;height:22px;border-radius:50%;border:1px solid rgba(237,234,224,0.15);background:transparent;color:var(--faint);font-size:11px;display:flex;align-items:center;justify-content:center;">⚙</button>
+    </div>
     <div style="font-size:12px;color:var(--faint);margin-bottom:12px;">Norėdamas prisidėti prie tikslo, pridėk išlaidą su ta pačia kategorija skiltyje „Pridėti".</div>
     ${goalCats.length ? goalCats.map(c => catRow(c, monthKey, d, "budget", false)).join("") : `<div class="empty">Dar nesukūrei taupymo tikslo. Sukurk jį Bendros skilties nustatymuose (kategorijų valdymas).</div>`}
 
@@ -3362,6 +3499,7 @@ function renderSavingsGoals() {
         <span>Nepriskirta</span><span class="tape" style="color:var(--faint);">€${fmt(unallocated)}</span>
       </div>` : ""}
     </div>
+  </div>
   </div>`;
 }
 function renderSettings() {
@@ -3504,7 +3642,7 @@ function renderSettings() {
     </div>`;
   }).join("");
 
-  return `<div class="topbar" style="display:flex;align-items:center;justify-content:space-between;">
+  return `<div class="rv-theme"><div class="topbar" style="display:flex;align-items:center;justify-content:space-between;">
     <div class="eyebrow">Nustatymai</div>
     <div style="display:flex;gap:8px;">
       <button class="icon-btn" onclick="state.showFamily=true;loadFamilyInfo();render();" aria-label="Šeimos paskyra" style="border:1px solid rgba(237,234,224,0.15);border-radius:14px;padding:5px 12px;font-size:12px;">${ICONS.family}</button>
@@ -3515,7 +3653,7 @@ function renderSettings() {
   <div class="tabpanel fade-in">
     <div style="display:flex;align-items:center;justify-content:space-between;">
       <div class="section-label" style="margin-bottom:0;">Kategorijos</div>
-      <button type="button" onclick="state.reorderingCategories=!state.reorderingCategories;render();" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid ${state.reorderingCategories?'var(--gold)':'rgba(237,234,224,0.15)'};background:${state.reorderingCategories?'rgba(201,162,39,0.12)':'transparent'};color:${state.reorderingCategories?'var(--gold)':'var(--faint)'};">${state.reorderingCategories?'Baigta':'Tvarkyti'}</button>
+      <button type="button" onclick="state.reorderingCategories=!state.reorderingCategories;render();" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid ${state.reorderingCategories?'var(--gold)':'rgba(237,234,224,0.15)'};background:${state.reorderingCategories?'var(--gold-tint)':'transparent'};color:${state.reorderingCategories?'var(--gold)':'var(--faint)'};">${state.reorderingCategories?'Baigta':'Tvarkyti'}</button>
     </div>
     ${rows}
     <form class="stack" style="margin-top:16px;" onsubmit="return submitAddCategory(event)">
@@ -3563,24 +3701,24 @@ function renderSettings() {
     <div class="field-row">
       <span class="field-row-label">Šrifto dydis</span>
       <div style="display:flex;gap:6px;">
-        <button type="button" onclick="setFontSize('small')" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid ${state.fontSize==='small'?'var(--gold)':'rgba(237,234,224,0.15)'};background:${state.fontSize==='small'?'rgba(201,162,39,0.12)':'transparent'};color:${state.fontSize==='small'?'var(--gold)':'var(--faint)'};">Mažas</button>
-        <button type="button" onclick="setFontSize('normal')" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid ${state.fontSize==='normal'||!state.fontSize?'var(--gold)':'rgba(237,234,224,0.15)'};background:${state.fontSize==='normal'||!state.fontSize?'rgba(201,162,39,0.12)':'transparent'};color:${state.fontSize==='normal'||!state.fontSize?'var(--gold)':'var(--faint)'};">Įprastas</button>
-        <button type="button" onclick="setFontSize('large')" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid ${state.fontSize==='large'?'var(--gold)':'rgba(237,234,224,0.15)'};background:${state.fontSize==='large'?'rgba(201,162,39,0.12)':'transparent'};color:${state.fontSize==='large'?'var(--gold)':'var(--faint)'};">Didelis</button>
+        <button type="button" onclick="setFontSize('small')" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid ${state.fontSize==='small'?'var(--gold)':'rgba(237,234,224,0.15)'};background:${state.fontSize==='small'?'var(--gold-tint)':'transparent'};color:${state.fontSize==='small'?'var(--gold)':'var(--faint)'};">Mažas</button>
+        <button type="button" onclick="setFontSize('normal')" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid ${state.fontSize==='normal'||!state.fontSize?'var(--gold)':'rgba(237,234,224,0.15)'};background:${state.fontSize==='normal'||!state.fontSize?'var(--gold-tint)':'transparent'};color:${state.fontSize==='normal'||!state.fontSize?'var(--gold)':'var(--faint)'};">Įprastas</button>
+        <button type="button" onclick="setFontSize('large')" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid ${state.fontSize==='large'?'var(--gold)':'rgba(237,234,224,0.15)'};background:${state.fontSize==='large'?'var(--gold-tint)':'transparent'};color:${state.fontSize==='large'?'var(--gold)':'var(--faint)'};">Didelis</button>
       </div>
     </div>
     <div class="field-row">
       <span class="field-row-label">Apžvalgos indikatorius</span>
       <div style="display:flex;gap:6px;">
-        <button type="button" onclick="setGaugeStyle('ring')" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid ${state.gaugeStyle!=='fuel'?'var(--gold)':'rgba(237,234,224,0.15)'};background:${state.gaugeStyle!=='fuel'?'rgba(201,162,39,0.12)':'transparent'};color:${state.gaugeStyle!=='fuel'?'var(--gold)':'var(--faint)'};">Žiedas</button>
-        <button type="button" onclick="setGaugeStyle('fuel')" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid ${state.gaugeStyle==='fuel'?'var(--gold)':'rgba(237,234,224,0.15)'};background:${state.gaugeStyle==='fuel'?'rgba(201,162,39,0.12)':'transparent'};color:${state.gaugeStyle==='fuel'?'var(--gold)':'var(--faint)'};">Rodyklė</button>
+        <button type="button" onclick="setGaugeStyle('ring')" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid ${state.gaugeStyle!=='fuel'?'var(--gold)':'rgba(237,234,224,0.15)'};background:${state.gaugeStyle!=='fuel'?'var(--gold-tint)':'transparent'};color:${state.gaugeStyle!=='fuel'?'var(--gold)':'var(--faint)'};">Žiedas</button>
+        <button type="button" onclick="setGaugeStyle('fuel')" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid ${state.gaugeStyle==='fuel'?'var(--gold)':'rgba(237,234,224,0.15)'};background:${state.gaugeStyle==='fuel'?'var(--gold-tint)':'transparent'};color:${state.gaugeStyle==='fuel'?'var(--gold)':'var(--faint)'};">Rodyklė</button>
       </div>
     </div>
     <div class="field-row">
       <span class="field-row-label">Tema</span>
       <div style="display:flex;gap:6px;">
-        <button type="button" onclick="setTheme('dark')" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid ${state.theme==='dark'?'var(--gold)':'rgba(237,234,224,0.15)'};background:${state.theme==='dark'?'rgba(201,162,39,0.12)':'transparent'};color:${state.theme==='dark'?'var(--gold)':'var(--faint)'};">Tamsi</button>
-        <button type="button" onclick="setTheme('light')" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid ${state.theme==='light'?'var(--gold)':'rgba(237,234,224,0.15)'};background:${state.theme==='light'?'rgba(201,162,39,0.12)':'transparent'};color:${state.theme==='light'?'var(--gold)':'var(--faint)'};">Šviesi</button>
-        <button type="button" onclick="setTheme('auto')" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid ${state.theme==='auto'?'var(--gold)':'rgba(237,234,224,0.15)'};background:${state.theme==='auto'?'rgba(201,162,39,0.12)':'transparent'};color:${state.theme==='auto'?'var(--gold)':'var(--faint)'};">Auto</button>
+        <button type="button" onclick="setTheme('dark')" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid ${state.theme==='dark'?'var(--gold)':'rgba(237,234,224,0.15)'};background:${state.theme==='dark'?'var(--gold-tint)':'transparent'};color:${state.theme==='dark'?'var(--gold)':'var(--faint)'};">Tamsi</button>
+        <button type="button" onclick="setTheme('light')" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid ${state.theme==='light'?'var(--gold)':'rgba(237,234,224,0.15)'};background:${state.theme==='light'?'var(--gold-tint)':'transparent'};color:${state.theme==='light'?'var(--gold)':'var(--faint)'};">Šviesi</button>
+        <button type="button" onclick="setTheme('auto')" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid ${state.theme==='auto'?'var(--gold)':'rgba(237,234,224,0.15)'};background:${state.theme==='auto'?'var(--gold-tint)':'transparent'};color:${state.theme==='auto'?'var(--gold)':'var(--faint)'};">Auto</button>
       </div>
     </div>
     <div class="field-row">
@@ -3693,6 +3831,7 @@ function renderSettings() {
 
     <div class="section-label" style="margin-top:22px;">Paskyra</div>
     <button type="button" onclick="atsijungti()" style="width:100%;padding:12px;border-radius:8px;border:1px solid rgba(217,119,66,0.4);background:transparent;color:var(--red, #D97742);font-size:14px;">Atsijungti</button>
+  </div>
   </div>`;
 }
 async function loadFamilyInfo() {
@@ -3906,7 +4045,7 @@ function renderChildExpensesPanel() {
 }
 function renderFamily() {
   const info = state.familyInfo;
-  return `<div class="topbar" style="display:flex;align-items:center;justify-content:space-between;">
+  return `<div class="rv-theme"><div class="topbar" style="display:flex;align-items:center;justify-content:space-between;">
     <div class="eyebrow">Šeimos paskyra</div>
     <button class="icon-btn" onclick="state.showFamily=false;render();" aria-label="Uždaryti">${ICONS.x}</button>
   </div>
@@ -3926,7 +4065,7 @@ function renderFamily() {
             <span style="font-size:14px;">${escapeHtml(n.email)}${manoVartotojas && n.id === manoVartotojas.id ? ' <span style="color:var(--faint);font-size:11px;">(tu)</span>' : ''}</span>
             ${info.mano_role === "parent" ? `
               <div style="display:flex;gap:6px;flex-shrink:0;">
-                <button type="button" onclick="setMemberRole(${n.id},'parent')" style="padding:5px 10px;border-radius:8px;font-size:11px;border:1px solid ${n.role==='parent'?'var(--gold)':'rgba(237,234,224,0.15)'};background:${n.role==='parent'?'rgba(201,162,39,0.15)':'transparent'};color:${n.role==='parent'?'var(--gold)':'var(--faint)'};">Tėvas/mama</button>
+                <button type="button" onclick="setMemberRole(${n.id},'parent')" style="padding:5px 10px;border-radius:8px;font-size:11px;border:1px solid ${n.role==='parent'?'var(--gold)':'rgba(237,234,224,0.15)'};background:${n.role==='parent'?'var(--gold-tint)':'transparent'};color:${n.role==='parent'?'var(--gold)':'var(--faint)'};">Tėvas/mama</button>
                 <button type="button" onclick="setMemberRole(${n.id},'child')" style="padding:5px 10px;border-radius:8px;font-size:11px;border:1px solid ${n.role==='child'?'var(--blue)':'rgba(237,234,224,0.15)'};background:${n.role==='child'?'rgba(111,163,191,0.15)':'transparent'};color:${n.role==='child'?'var(--blue)':'var(--faint)'};">Vaikas</button>
               </div>
             ` : `<span class="cat-tag" style="${n.role==='parent'?'':'color:var(--blue);border-color:var(--blue);'}">${n.role === "parent" ? "Tėvas/mama" : "Vaikas"}</span>`}
@@ -3948,6 +4087,7 @@ function renderFamily() {
       <label class="field">Prisijungti su kvietimo kodu<input id="family_code_input" type="text" placeholder="Pvz. AB12CD" style="text-transform:uppercase;" /></label>
       <button type="button" class="submit-btn" style="margin-top:10px;background:var(--blue);" onclick="joinFamily()">Prisijungti prie šeimos</button>
     `}
+  </div>
   </div>`;
 }
 
@@ -4578,9 +4718,21 @@ function setTab(t) {
   if (t === "report") state.reportCursor = currentMonthKey();
   state.tab = t;
   render();
+  if (t === "finance") autoRefreshPricesIfStale();
+}
+function autoRefreshPricesIfStale() {
+  const STALE_MS = 60 * 60 * 1000; // 1 valanda
+  const senas = (isoStr) => !isoStr || (Date.now() - new Date(isoStr).getTime()) > STALE_MS;
+  const stockKeyPresent = state.stockPriceProvider === "twelvedata" ? !!state.twelveDataApiKey : !!state.finnhubApiKey;
+  if (stockKeyPresent && state.holdings.length > 0 && !state.priceRefreshing && state.holdings.some(h => senas(h.lastPriceAt))) {
+    refreshHoldingPrices();
+  }
+  if (state.cryptoHoldings.length > 0 && !state.cryptoPriceRefreshing && state.cryptoHoldings.some(h => senas(h.lastPriceAt))) {
+    refreshCryptoPrices();
+  }
 }
 
-const PERSISTED_KEYS = ["expenses","incomes","budgets","categories","categoryConfig","baseIncome","gaugeStyle","theme","lastExportAt","recurringTemplates","budgetStartDay","savingsBalance","savingsGoalMin","savingsLog","merchantMap","importedHashes","appPin","debtStrategy","appliedRules","ruleSnapshots","netWorthHistory","recurringIncomes","csvMappingMemory","holdings","finnhubApiKey","cryptoHoldings","fontSize","categoryViewStyle","remindersEnabled","lastReminderShownAt","rolloverResolvedMonths","pendingApprovals"];
+const PERSISTED_KEYS = ["expenses","incomes","budgets","categories","categoryConfig","baseIncome","gaugeStyle","theme","lastExportAt","recurringTemplates","budgetStartDay","savingsBalance","savingsGoalMin","savingsLog","merchantMap","importedHashes","appPin","debtStrategy","appliedRules","ruleSnapshots","netWorthHistory","recurringIncomes","csvMappingMemory","holdings","finnhubApiKey","cryptoHoldings","fontSize","categoryViewStyle","remindersEnabled","lastReminderShownAt","rolloverResolvedMonths","pendingApprovals","investmentCashBalance","stockPriceProvider","twelveDataApiKey"];
 
 const KEY_SCHEMA = {
   expenses: "array", incomes: "array", budgets: "object", categories: "array", categoryConfig: "object",
@@ -4596,6 +4748,9 @@ const KEY_SCHEMA = {
   lastReminderShownAt: "string",
   rolloverResolvedMonths: "array",
   pendingApprovals: "array",
+  investmentCashBalance: "number",
+  stockPriceProvider: "string",
+  twelveDataApiKey: "string",
 };
 function typeMatches(val, expected) {
   if (val === null || val === undefined) return true;
