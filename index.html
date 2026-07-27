@@ -4354,7 +4354,7 @@ function renderImportMapping() {
   const previewRows = dataRows.slice(0,3);
   const previewText = [headers, ...previewRows].map(r => r.join(" | ")).join("\n");
   const mojibake = looksMojibake(previewText);
-  return `<div class="topbar"><div class="eyebrow">Banko išrašo importas</div></div>
+  return `<div class="rv-theme"><div class="topbar"><div class="eyebrow">Banko išrašo importas</div></div>
   <div class="tabpanel fade-in">
     ${state.csvMappingMemory[state.importHeaderSig] ? `<div style="font-size:12px;color:var(--green);margin-bottom:12px;">✓ Stulpeliai atpažinti iš ankstesnio šio banko importo.</div>` : ""}
     ${skippedRows > 0 ? `<div style="font-size:12px;color:var(--faint);margin-bottom:12px;">Praleista ${skippedRows} eilutė(-ių) prieš antraštę (aptikta automatiškai).</div>` : ""}
@@ -4382,6 +4382,7 @@ function renderImportMapping() {
       <button type="button" class="submit-btn" style="flex:1;width:auto;" onclick="proceedToReview()">Toliau</button>
       <button type="button" class="submit-btn" style="background:var(--surface-light);color:var(--paper);flex:0 0 auto;width:auto;padding:0 18px;" onclick="cancelImport()">Atšaukti</button>
     </div>
+  </div>
   </div>`;
 }
 
@@ -4409,7 +4410,7 @@ function renderImportReview() {
       </div>
     </div>`).join("");
 
-  return `<div class="topbar"><div class="eyebrow">Peržiūrėk prieš importuojant</div></div>
+  return `<div class="rv-theme"><div class="topbar"><div class="eyebrow">Peržiūrėk prieš importuojant</div></div>
   <div class="tabpanel fade-in">
     <div style="font-size:12px;color:var(--faint);margin-bottom:12px;">Rasta ${drafts.length} įrašų. Pažymėti dublikatai (jau importuoti anksčiau) automatiškai nuimti — peržiūrėk kategorijas ir patvirtink.</div>
     ${state.importSkippedInfo ? `<div style="font-size:12px;color:var(--gold);margin-bottom:12px;">${state.importSkippedInfo}</div>` : ""}
@@ -4418,6 +4419,7 @@ function renderImportReview() {
       <button type="button" class="submit-btn" style="flex:1;width:auto;" onclick="confirmImport()">Importuoti pažymėtus (${includedCount})</button>
       <button type="button" class="submit-btn" style="background:var(--surface-light);color:var(--paper);flex:0 0 auto;width:auto;padding:0 18px;" onclick="cancelImport()">Atšaukti</button>
     </div>
+  </div>
   </div>`;
 }
 function renderPortfolioImportMapping() {
@@ -4425,7 +4427,7 @@ function renderPortfolioImportMapping() {
   const m = state.portfolioImportMapping;
   const colOptions = (selected) => `<option value="">–</option>` + headers.map((h,i) => `<option value="${i}" ${selected===i?'selected':''}>${h}</option>`).join("");
   const previewRows = dataRows.slice(0,3);
-  return `<div class="topbar"><div class="eyebrow">Brokerio išrašo importas</div></div>
+  return `<div class="rv-theme"><div class="topbar"><div class="eyebrow">Brokerio išrašo importas</div></div>
   <div class="tabpanel fade-in">
     <div class="section-label">1. Nurodyk, kur kas yra</div>
     <label class="field">Tikslo (simbolio) stulpelis<select onchange="updatePortfolioMapping('symbolCol', this.value)">${colOptions(m.symbolCol)}</select></label>
@@ -4454,6 +4456,7 @@ function renderPortfolioImportMapping() {
       <button type="button" class="submit-btn" style="flex:1;width:auto;" onclick="proceedToPortfolioReview()">Toliau</button>
       <button type="button" class="submit-btn" style="background:var(--surface-light);color:var(--paper);flex:0 0 auto;width:auto;padding:0 18px;" onclick="cancelPortfolioImport()">Atšaukti</button>
     </div>
+  </div>
   </div>`;
 }
 function renderPortfolioImportReview() {
@@ -4472,7 +4475,7 @@ function renderPortfolioImportReview() {
       </div>
     </div>`;
   }).join("");
-  return `<div class="topbar"><div class="eyebrow">Peržiūrėk prieš importuojant</div></div>
+  return `<div class="rv-theme"><div class="topbar"><div class="eyebrow">Peržiūrėk prieš importuojant</div></div>
   <div class="tabpanel fade-in">
     <div style="font-size:12px;color:var(--faint);margin-bottom:12px;">Rasta ${drafts.length} tikslų.${state.portfolioImportSkipped ? ` Praleista ${state.portfolioImportSkipped} eilučių (dividendai/įnašai/pardavimai).` : ""}</div>
     <label class="field" style="margin-bottom:14px;">Jei tikslas jau yra portfelyje
@@ -4486,6 +4489,7 @@ function renderPortfolioImportReview() {
       <button type="button" class="submit-btn" style="flex:1;width:auto;" onclick="confirmPortfolioImport()">Importuoti pažymėtus (${includedCount})</button>
       <button type="button" class="submit-btn" style="background:var(--surface-light);color:var(--paper);flex:0 0 auto;width:auto;padding:0 18px;" onclick="cancelPortfolioImport()">Atšaukti</button>
     </div>
+  </div>
   </div>`;
 }
 function submitAddCategory(ev) {
