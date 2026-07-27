@@ -438,7 +438,11 @@ const STARTER_MERCHANTS = [
   { keywords: ["CITYBEE"], category: "Transportas" },
   { keywords: ["SPARK"], category: "Transportas" },
   { keywords: ["LTG LINK", "LIETUVOS GELEZINKELIAI"], category: "Transportas" },
-  { keywords: ["MANO BILIETAS", "VILNIUS VIESASIS", "VVT"], category: "Transportas" },
+  { keywords: ["MANO BILIETAS", "VILNIUS VIESASIS", "VVT", "KELEIVINIS TRANSPORTAS"], category: "Transportas" },
+  { keywords: ["DEPO"], category: "Kita" },
+  { keywords: ["SENUKAI", "SENUKU"], category: "Kita" },
+  { keywords: ["LOTO.LT", "LOTO LT"], category: "Kita" },
+  { keywords: ["PASKOLOS PALŪKANOS", "PASKOLOS PALUKANOS", "SUKAUPTOS PALŪKANOS", "SUKAUPTOS PALUKANOS"], category: "Skolos" },
   { keywords: ["APOTHEKA"], category: "Sveikata" },
   { keywords: ["EUROVAISTINE"], category: "Sveikata" },
   { keywords: ["GINTARINE VAISTINE", "GINTARINE"], category: "Sveikata" },
@@ -474,7 +478,7 @@ const STARTER_MERCHANTS = [
   { keywords: ["CCC"], category: "Drabužiai" },
   { keywords: ["EOBUWIE"], category: "Drabužiai" },
   { keywords: ["DECATHLON"], category: "Kita" },
-  { keywords: ["IKEA", "JYSK", "SENUKAI"], category: "Namai / Sąskaitos" },
+  { keywords: ["IKEA", "JYSK"], category: "Namai / Sąskaitos" },
   { keywords: ["KTC"], category: "Namai / Sąskaitos" },
   { keywords: ["TOPO CENTRAS"], category: "Namai / Sąskaitos" },
   { keywords: ["PIGU.LT", "PIGU LT"], category: "Kita" },
@@ -1227,7 +1231,11 @@ function proceedToReview() {
       save("csvMappingMemory", state.csvMappingMemory);
     }
     const drafts = [];
-    let skippedCurrency = 0, skippedStatus = 0;
+    let skippedCurrency = 0, skippedStatus = 0, skippedBalance = 0;
+    const balanceRowRe = /LIKUTIS|BALANCE\b/i;
+    const toSavingsRe = /\bĮ\s*(E\.?\s*)?TAUPYKL/i;
+    const internalTransferRe = /REVOLUT|E\.?\s*TAUPYKL|TAUPYKL[EĖ]|SAVO\s+S[AĄ]SKAIT|TARP\s+S[AĄ]SKAIT/i;
+    const savingsGoalCategory = state.categories.find(c => catType(c) === "savingsgoal");
     dataRows.forEach((row) => {
       if (currencyCol !== null) {
         const cur = (row[currencyCol] || "").toUpperCase().trim();
@@ -1238,6 +1246,7 @@ function proceedToReview() {
         if (st && /(PENDING|REVERTED|DECLINED|FAILED|LAUKIAMA|ATMEST)/.test(st)) { skippedStatus++; return; }
       }
       const rawDate = row[dateCol], rawAmount = row[amountCol], rawDesc = descCol !== null ? row[descCol] : "";
+      if (balanceRowRe.test(rawDesc)) { skippedBalance++; return; }
       const date = parseFlexibleDate(rawDate);
       const amount = parseFlexibleAmount(rawAmount);
       if (!date || amount === null || amount === 0) return;
@@ -1253,16 +1262,23 @@ function proceedToReview() {
         isIncome = amount > 0;
       }
       const absAmount = Math.abs(amount);
-      const suggested = suggestCategoryForMerchant(rawDesc) || state.categories[0];
+      // "Į taupyklę" pavedimai (pvz. Swedbank automatinis apvalinimas po pirkinio) yra
+      // reali santaupa, ne tik pinigų judėjimas tarp sąskaitų — jei yra sukurta taupymo
+      // tikslo kategorija, priskiriam ją čia, kad santaupų balansas atsinaujintų teisingai.
+      const isSavingsRoundup = toSavingsRe.test(rawDesc) && savingsGoalCategory;
+      const isTransfer = !isSavingsRoundup && internalTransferRe.test(rawDesc);
+      const suggested = isSavingsRoundup ? savingsGoalCategory : (suggestCategoryForMerchant(rawDesc) || state.categories[0]);
       const h = hashRow(date, absAmount, rawDesc);
       drafts.push({
-        id: uid(), date, amount: absAmount, rawDesc: rawDesc || "", kind: isIncome ? "income" : "expense",
-        category: suggested, necessity: "reikalinga", include: !state.importedHashes.includes(h), duplicate: state.importedHashes.includes(h), hash: h,
+        id: uid(), date, amount: absAmount, rawDesc: rawDesc || "", kind: isIncome && !isSavingsRoundup ? "income" : "expense",
+        category: suggested, necessity: "reikalinga",
+        include: !state.importedHashes.includes(h) && !isTransfer,
+        duplicate: state.importedHashes.includes(h), transferSuspected: isTransfer, savingsRoundup: isSavingsRoundup, hash: h,
       });
     });
     if (drafts.length === 0) { alert("Nepavyko atpažinti nė vieno įrašo. Patikrink stulpelių pasirinkimą."); return; }
-    state.importSkippedInfo = (skippedCurrency || skippedStatus)
-      ? `Praleista: ${skippedCurrency ? `${skippedCurrency} ne-EUR eilučių` : ""}${skippedCurrency && skippedStatus ? ", " : ""}${skippedStatus ? `${skippedStatus} neįvykdytų/laukiančių operacijų` : ""}.`
+    state.importSkippedInfo = (skippedCurrency || skippedStatus || skippedBalance)
+      ? `Praleista: ${skippedCurrency ? `${skippedCurrency} ne-EUR eilučių` : ""}${skippedCurrency && skippedStatus ? ", " : ""}${skippedStatus ? `${skippedStatus} neįvykdytų/laukiančių operacijų` : ""}${(skippedCurrency||skippedStatus) && skippedBalance ? ", " : ""}${skippedBalance ? `${skippedBalance} likučio/suvestinės eilučių` : ""}.`
       : null;
     state.importDrafts = drafts;
     state.importStep = "review";
@@ -1294,6 +1310,7 @@ function confirmImport() {
     } else {
       state.expenses.unshift({ id: uid(), amount: d.amount, category: d.category, date: d.date, note: d.rawDesc.slice(0,60), necessity: d.necessity });
       if (catType(d.category) === "savingsgoal") state.savingsBalance += Number(d.amount);
+      if (catType(d.category) === "investment") state.investmentCashBalance += Number(d.amount);
       const norm = normalizeMerchant(d.rawDesc);
       if (norm) state.merchantMap[norm] = d.category;
     }
@@ -2364,35 +2381,53 @@ function confirmEditHolding(id) {
 function updateFinnhubKey(val) { state.finnhubApiKey = val.trim(); persistAll(); }
 function updateTwelveDataKey(val) { state.twelveDataApiKey = val.trim(); persistAll(); }
 function updateStockPriceProvider(val) { state.stockPriceProvider = val; persistAll(); render(); }
+
+async function fetchFinnhubPrice(ticker, apiKey) {
+  const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(ticker)}&token=${encodeURIComponent(apiKey)}`);
+  if (!res.ok) {
+    const msg = res.status === 401 ? "Neteisingas API raktas." : res.status === 429 ? "Viršytas užklausų limitas." : `Klaida (HTTP ${res.status})`;
+    return { ok: false, error: msg };
+  }
+  const data = await res.json();
+  if (data && typeof data.c === "number" && data.c > 0) return { ok: true, price: data.c };
+  return { ok: false, error: "Tikslas nerastas arba be kainos duomenų (Finnhub nemokamas planas — tik JAV biržos)." };
+}
+async function fetchTwelveDataPrice(ticker, apiKey) {
+  const res = await fetch(`https://api.twelvedata.com/price?symbol=${encodeURIComponent(ticker)}&apikey=${encodeURIComponent(apiKey)}`);
+  const data = await res.json();
+  if (data && data.price && !isNaN(parseFloat(data.price))) return { ok: true, price: parseFloat(data.price) };
+  return { ok: false, error: (data && data.message) ? data.message : "Tikslas nerastas arba be kainos duomenų." };
+}
+
 async function refreshHoldingPrices() {
-  const provider = state.stockPriceProvider || "finnhub";
-  const apiKey = provider === "twelvedata" ? state.twelveDataApiKey : state.finnhubApiKey;
-  const providerName = provider === "twelvedata" ? "Twelve Data" : "Finnhub";
-  if (!apiKey) { alert(`Pirma įvesk ${providerName} API raktą Nustatymuose.`); return; }
+  const primary = state.stockPriceProvider || "finnhub";
+  const secondary = primary === "twelvedata" ? "finnhub" : "twelvedata";
+  const keys = { finnhub: state.finnhubApiKey, twelvedata: state.twelveDataApiKey };
+  const names = { finnhub: "Finnhub", twelvedata: "Twelve Data" };
+  if (!keys[primary]) { alert(`Pirma įvesk ${names[primary]} API raktą Nustatymuose.`); return; }
   if (state.holdings.length === 0) return;
   state.priceRefreshing = true; render();
+  const fetchFor = (provider, ticker) => provider === "twelvedata" ? fetchTwelveDataPrice(ticker, keys.twelvedata) : fetchFinnhubPrice(ticker, keys.finnhub);
   for (const h of state.holdings) {
     try {
-      if (provider === "twelvedata") {
-        const res = await fetch(`https://api.twelvedata.com/price?symbol=${encodeURIComponent(h.ticker)}&apikey=${encodeURIComponent(apiKey)}`);
-        const data = await res.json();
-        if (data && data.price && !isNaN(parseFloat(data.price))) {
-          h.lastPrice = parseFloat(data.price); h.lastPriceAt = new Date().toISOString(); h.priceError = null;
-        } else {
-          h.priceError = (data && data.message) ? data.message : "Tikslas nerastas arba be kainos duomenų.";
-        }
+      let result = await fetchFor(primary, h.ticker);
+      let usedFallback = false;
+      if (!result.ok && keys[secondary]) {
+        result = await fetchFor(secondary, h.ticker);
+        usedFallback = true;
+      }
+      if (result.ok) {
+        h.lastPrice = result.price; h.lastPriceAt = new Date().toISOString();
+        h.priceError = null;
       } else {
-        const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(h.ticker)}&token=${encodeURIComponent(apiKey)}`);
-        if (!res.ok) { h.priceError = res.status === 401 ? "Neteisingas API raktas." : res.status === 429 ? "Viršytas užklausų limitas — pabandyk vėliau." : `Klaida (HTTP ${res.status})`; continue; }
-        const data = await res.json();
-        if (data && typeof data.c === "number" && data.c > 0) {
-          h.lastPrice = data.c; h.lastPriceAt = new Date().toISOString(); h.priceError = null;
-        } else {
-          h.priceError = "Tikslas nerastas arba be kainos duomenų. Finnhub nemokamas planas palaiko tik JAV biržas — Europos tikslams (pvz. QDVE) pabandyk Twelve Data.";
-        }
+        h.priceError = usedFallback
+          ? `Nerasta nei per ${names[primary]}, nei per ${names[secondary]}: ${result.error}`
+          : keys[secondary]
+            ? result.error
+            : `${result.error} (Pridėk ${names[secondary]} raktą kaip atsarginį šaltinį Nustatymuose, kad ši akcija būtų ieškoma ir ten.)`;
       }
     } catch (err) {
-      h.priceError = `Nepavyko prisijungti prie ${providerName}.`;
+      h.priceError = "Nepavyko prisijungti prie kainų šaltinio.";
     }
   }
   state.priceRefreshing = false;
@@ -3414,19 +3449,19 @@ function renderFinance() {
     ${settingsSectionHeader('stocks', 'Investicijų portfelis', state.holdings.length ? `${state.holdings.length} laikym(ai/ų)` : 'Nėra pridėtų')}
     <div class="settings-collapse ${state.settingsExpanded['stocks']?'expanded':''}">
     <div class="field-row">
-      <span class="field-row-label">Kainų šaltinis</span>
+      <span class="field-row-label">Pagrindinis kainų šaltinis</span>
     </div>
     <select onchange="updateStockPriceProvider(this.value)" style="margin-bottom:6px;">
-      <option value="finnhub" ${state.stockPriceProvider!=='twelvedata'?'selected':''}>Finnhub (tik JAV biržos — NYSE/NASDAQ)</option>
-      <option value="twelvedata" ${state.stockPriceProvider==='twelvedata'?'selected':''}>Twelve Data (Europa ir daugiau biržų)</option>
+      <option value="finnhub" ${state.stockPriceProvider!=='twelvedata'?'selected':''}>Finnhub</option>
+      <option value="twelvedata" ${state.stockPriceProvider==='twelvedata'?'selected':''}>Twelve Data</option>
     </select>
-    ${state.stockPriceProvider === "twelvedata" ? `
-      <input type="text" value="${escapeHtml(state.twelveDataApiKey)}" placeholder="Įklijuok nemokamą raktą iš twelvedata.com" onchange="updateTwelveDataKey(this.value)" style="margin-bottom:6px;" />
-      <div style="font-size:11px;color:var(--faint);margin-bottom:14px;">Nemokamai gaunamas per twelvedata.com. Padengia 50+ biržų, įskaitant Europos (pvz. XETRA — tinka tokiems tikslams kaip QDVE). Nemokamas planas: ~800 užklausų/dieną.</div>
-    ` : `
-      <input type="text" value="${escapeHtml(state.finnhubApiKey)}" placeholder="Įklijuok nemokamą raktą iš finnhub.io" onchange="updateFinnhubKey(this.value)" style="margin-bottom:6px;" />
-      <div style="font-size:11px;color:var(--faint);margin-bottom:14px;">Nemokamai gaunamas per finnhub.io (registracija el. paštu, be mokėjimo kortelės). <b>Svarbu:</b> nemokamas planas palaiko tik JAV biržų (NYSE/NASDAQ) tickerius — Europos akcijoms/ETF (pvz. QDVE) pasirink Twelve Data aukščiau.</div>
-    `}
+    <div style="font-size:11px;color:var(--faint);margin-bottom:14px;">Įvesk abu raktus, jei turi — jei pagrindinis šaltinis tikslo nerastų, programėlė automatiškai pabandys per kitą.</div>
+
+    <label class="field">Finnhub raktas<input type="text" value="${escapeHtml(state.finnhubApiKey)}" placeholder="Įklijuok nemokamą raktą iš finnhub.io" onchange="updateFinnhubKey(this.value)" /></label>
+    <div style="font-size:11px;color:var(--faint);margin-bottom:12px;">Nemokamas planas: tik JAV biržos (NYSE/NASDAQ), bet paprastai be papildomų apribojimų populiarioms akcijoms.</div>
+
+    <label class="field">Twelve Data raktas<input type="text" value="${escapeHtml(state.twelveDataApiKey)}" placeholder="Įklijuok nemokamą raktą iš twelvedata.com" onchange="updateTwelveDataKey(this.value)" /></label>
+    <div style="font-size:11px;color:var(--faint);margin-bottom:14px;">Padengia 50+ biržų (įsk. Europos, pvz. QDVE), bet nemokamas planas kai kurioms populiarioms JAV akcijoms (pvz. AAPL) gali rodyti „reikia Grow/Venture plano" — tokiu atveju Finnhub raktas (aukščiau) juos padengs kaip atsarginis šaltinis.</div>
 
     ${holdingRows || `<div class="empty">Nėra pridėtų laikymų.</div>`}
     <form class="stack" style="margin-top:12px;" onsubmit="return submitAddHolding(event)">
@@ -4431,7 +4466,7 @@ function renderImportReview() {
         <input type="checkbox" ${d.include?'checked':''} onchange="toggleDraftInclude('${d.id}')" style="margin-top:4px;" />
         <div style="flex:1;min-width:0;">
           <div style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(d.rawDesc) || "(be aprašymo)"}</div>
-          <div style="font-size:11px;color:var(--faint);margin-bottom:6px;">${d.date.split("-").reverse().join(".")}${d.duplicate?' · <span style="color:var(--rust)">galima dublė</span>':''}</div>
+          <div style="font-size:11px;color:var(--faint);margin-bottom:6px;">${d.date.split("-").reverse().join(".")}${d.duplicate?' · <span style="color:var(--rust)">galima dublė</span>':''}${d.transferSuspected?' · <span style="color:var(--blue)">galimas vidinis pervedimas</span>':''}${d.savingsRoundup?' · <span style="color:var(--gold)">automatinis taupymas</span>':''}</div>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
             <select onchange="updateDraftKind('${d.id}', this.value)" style="width:auto;height:32px;font-size:12px;padding:0 6px;">
               <option value="expense" ${d.kind==='expense'?'selected':''}>Išlaida</option>
@@ -4448,7 +4483,7 @@ function renderImportReview() {
 
   return `<div class="rv-theme"><div class="topbar"><div class="eyebrow">Peržiūrėk prieš importuojant</div></div>
   <div class="tabpanel fade-in">
-    <div style="font-size:12px;color:var(--faint);margin-bottom:12px;">Rasta ${drafts.length} įrašų. Pažymėti dublikatai (jau importuoti anksčiau) automatiškai nuimti — peržiūrėk kategorijas ir patvirtink.</div>
+    <div style="font-size:12px;color:var(--faint);margin-bottom:12px;">Rasta ${drafts.length} įrašų. Pažymėti dublikatai ir galimi vidiniai pervedimai (Revolut, e. taupyklė ir pan.) automatiškai nuimti — peržiūrėk kategorijas ir patvirtink.</div>
     ${state.importSkippedInfo ? `<div style="font-size:12px;color:var(--gold);margin-bottom:12px;">${state.importSkippedInfo}</div>` : ""}
     ${rows}
     <div style="display:flex;gap:8px;margin-top:16px;">
