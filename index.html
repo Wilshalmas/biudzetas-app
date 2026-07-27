@@ -3378,20 +3378,19 @@ function renderFinance() {
       </div>
     ` : ""}
 
-    ${state.investmentCashBalance > 0 ? `
     <div class="section-label">Investicinė sąskaita</div>
     <div class="tip-card" style="margin-bottom:16px;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <div>
           <div style="font-weight:600;">💼 Nepriskirti pinigai</div>
-          <div style="font-size:12px;color:var(--faint);">Laukia priskyrimo konkrečiai akcijai/kriptai</div>
+          <div style="font-size:12px;color:var(--faint);">${state.investmentCashBalance > 0 ? "Laukia priskyrimo konkrečiai akcijai/kriptai" : 'Kaupiasi automatiškai, kai pridedi išlaidą su „Investavimas" tipo kategorija'}</div>
         </div>
         <div style="display:flex;align-items:center;gap:10px;">
           <span class="tape" style="font-size:16px;">€${fmt(state.investmentCashBalance)}</span>
-          <button type="button" class="icon-btn" style="border:1px solid rgba(237,234,224,0.15);border-radius:14px;padding:5px 12px;font-size:12px;" onclick="state.showAllocInvestCash = !state.showAllocInvestCash; render();">${state.showAllocInvestCash ? "Uždaryti" : "Priskirti"}</button>
+          ${state.investmentCashBalance > 0 ? `<button type="button" class="icon-btn" style="border:1px solid rgba(237,234,224,0.15);border-radius:14px;padding:5px 12px;font-size:12px;" onclick="state.showAllocInvestCash = !state.showAllocInvestCash; render();">${state.showAllocInvestCash ? "Uždaryti" : "Priskirti"}</button>` : ""}
         </div>
       </div>
-      ${state.showAllocInvestCash ? `
+      ${state.showAllocInvestCash && state.investmentCashBalance > 0 ? `
         <div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(237,234,224,0.1);">
           <label class="field">Ką nusipirkai už šiuos €${fmt(state.investmentCashBalance)}?
             <select id="alloc_target" onchange="document.getElementById('alloc_new_wrap').style.display = this.value === '__new__' ? 'block' : 'none';">
@@ -3411,7 +3410,6 @@ function renderFinance() {
         </div>
       ` : ""}
     </div>
-    ` : ""}
 
     ${settingsSectionHeader('stocks', 'Investicijų portfelis', state.holdings.length ? `${state.holdings.length} laikym(ai/ų)` : 'Nėra pridėtų')}
     <div class="settings-collapse ${state.settingsExpanded['stocks']?'expanded':''}">
