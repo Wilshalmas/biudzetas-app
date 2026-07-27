@@ -828,6 +828,7 @@ let state = {
   reportMode: "month",
   reportYear: new Date().getFullYear(),
   reportCursor: null,
+  showMonthEntries: false,
   showFamily: false,
   showFinanceRules: false,
   lastMainTab: "overview",
@@ -3261,6 +3262,29 @@ function renderMonthlyReport() {
 
     <div class="section-label" style="margin-top:18px;">Daugiausiai leista</div>
     ${top3.length ? top3.map((c,i)=>`<div class="ledger-row" style="display:flex;justify-content:space-between;padding:8px 0;font-size:14px;"><span>${i+1}. ${c}</span><span class="tape">€${fmt(d.byCategory[c])}</span></div>`).join("") : `<div class="empty">Nėra duomenų šiam mėnesiui.</div>`}
+
+    <div class="section-label-row" style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;">
+      <span class="section-label" style="margin:0;">Visi šio laikotarpio įrašai</span>
+      <button type="button" class="icon-btn" style="border:1px solid rgba(237,234,224,0.15);border-radius:14px;padding:5px 12px;font-size:12px;" onclick="state.showMonthEntries=!state.showMonthEntries;render();">${state.showMonthEntries ? "Slėpti" : "Peržiūrėti / tvarkyti"}</button>
+    </div>
+    ${state.showMonthEntries ? (() => {
+      const monthExpenses = state.expenses.filter(e => e.date.slice(0,7) === monthKey).map(e => ({...e, kind: "expense"}));
+      const monthIncomes = state.incomes.filter(i => i.date.slice(0,7) === monthKey).map(i => ({...i, kind: "income"}));
+      const allItems = [...monthExpenses, ...monthIncomes].sort((a,b) => b.date.localeCompare(a.date));
+      if (allItems.length === 0) return `<div class="empty">Šiam laikotarpiui įrašų nėra.</div>`;
+      return allItems.map(item => `
+        <div class="ledger-row" style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;">
+          <div style="min-width:0;">
+            <div style="font-size:13px;">${item.kind === "income" ? "↑ " : ""}${escapeHtml(item.kind === "income" ? item.label : item.category)}${item.note ? ` · ${escapeHtml(item.note)}` : ""}</div>
+            <div style="font-size:11px;color:var(--faint);">${item.date.split("-").reverse().join(".")}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+            <span class="tape" style="color:${item.kind === "income" ? "var(--green)" : "var(--paper)"};">${item.kind === "income" ? "+" : ""}€${fmt(item.amount)}</span>
+            <button type="button" class="icon-btn" style="color:var(--rust);" onclick="${item.kind === "income" ? `removeIncome('${item.id}')` : `removeExpense('${item.id}')`}" aria-label="Trinti">${ICONS.trash}</button>
+          </div>
+        </div>
+      `).join("");
+    })() : ""}
   </div>`;
 }
 function renderFinance() {
