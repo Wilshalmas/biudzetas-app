@@ -1133,7 +1133,7 @@ function parseCSV(text) {
   return rows;
 }
 function looksMojibake(text) {
-  return /\uFFFD/.test(text) || /[ÃÂ][€ž©®°]/.test(text);
+  return /\uFFFD/.test(text) || /[ÃÂ][€ž©®°]/.test(text) || /Ä[…—®¯]/.test(text) || /Å[¡¾ž¸]/.test(text);
 }
 function findHeaderRowIndex(rows) {
   for (let i = 0; i < Math.min(rows.length - 1, 15); i++) {
@@ -1183,6 +1183,7 @@ function processCsvText(text) {
       descCol: guessColumn(headers, ["gavėjas", "gavejas", "aprašymas", "aprasymas", "description", "payee", "detalės", "detales", "mokėjimo paskirtis", "paskirtis"]),
       currencyCol: guessColumn(headers, ["valiuta", "currency", "ccy"]),
       statusCol: guessColumn(headers, ["state", "statusas", "būsena", "busena"]),
+      typeCol: guessColumn(headers, ["d/k", "dk", "įrašo tipas", "irašo tipas", "irasotipas", "tipas", "type", "kryptis"]),
       allExpense: false,
     };
     state.importHeaderSig = sig;
@@ -1212,17 +1213,17 @@ function reReadWithEncoding(encoding) {
   reader.readAsArrayBuffer(state.importFile);
 }
 function updateImportMapping(field, val) {
-  const numericFields = ["dateCol","amountCol","descCol","currencyCol","statusCol"];
+  const numericFields = ["dateCol","amountCol","descCol","currencyCol","statusCol","typeCol"];
   state.importMapping[field] = field === "allExpense" ? val : (numericFields.includes(field) ? (val === "" ? null : Number(val)) : val);
   render();
 }
 function proceedToReview() {
   try {
     const { headers, dataRows } = state.importRaw;
-    const { dateCol, amountCol, descCol, currencyCol, statusCol, allExpense } = state.importMapping;
+    const { dateCol, amountCol, descCol, currencyCol, statusCol, typeCol, allExpense } = state.importMapping;
     if (dateCol === null || amountCol === null) { alert("Pasirink bent datos ir sumos stulpelius."); return; }
     if (state.importHeaderSig) {
-      state.csvMappingMemory[state.importHeaderSig] = { dateCol, amountCol, descCol, currencyCol, statusCol, allExpense };
+      state.csvMappingMemory[state.importHeaderSig] = { dateCol, amountCol, descCol, currencyCol, statusCol, typeCol, allExpense };
       save("csvMappingMemory", state.csvMappingMemory);
     }
     const drafts = [];
@@ -1240,7 +1241,17 @@ function proceedToReview() {
       const date = parseFlexibleDate(rawDate);
       const amount = parseFlexibleAmount(rawAmount);
       if (!date || amount === null || amount === 0) return;
-      const isIncome = !allExpense && amount > 0;
+      let isIncome;
+      if (allExpense) {
+        isIncome = false;
+      } else if (typeCol !== null) {
+        // Kai kurie bankai (pvz. Swedbank) sumą visada rodo teigiamą, o kryptį
+        // žymi atskirame stulpelyje raide: K = kreditas/pajamos, D = debitas/išlaida.
+        const tipas = (row[typeCol] || "").trim().toUpperCase();
+        isIncome = tipas === "K" || tipas.startsWith("K") || /KREDIT|CREDIT/.test(tipas);
+      } else {
+        isIncome = amount > 0;
+      }
       const absAmount = Math.abs(amount);
       const suggested = suggestCategoryForMerchant(rawDesc) || state.categories[0];
       const h = hashRow(date, absAmount, rawDesc);
@@ -4392,6 +4403,9 @@ function renderImportMapping() {
     <label class="field">Sumos stulpelis<select onchange="updateImportMapping('amountCol', this.value)">${colOptions(m.amountCol)}</select></label>
     <div style="height:10px;"></div>
     <label class="field">Aprašymo / gavėjo stulpelis (nebūtina)<select onchange="updateImportMapping('descCol', this.value)">${colOptions(m.descCol)}</select></label>
+    <div style="height:10px;"></div>
+    <label class="field">Tipo (D/K) stulpelis — jei suma visada teigiama, o kryptis žymima raide (nebūtina)<select onchange="updateImportMapping('typeCol', this.value)">${colOptions(m.typeCol)}</select></label>
+    ${m.typeCol !== null ? `<div style="font-size:11px;color:var(--faint);margin-top:4px;">„K" (kreditas) laikoma pajama, „D" (debitas) — išlaida.</div>` : ""}
     ${m.currencyCol !== null ? `<div style="height:10px;"></div><label class="field">Valiutos stulpelis (aptikta — importuosime tik EUR)<select onchange="updateImportMapping('currencyCol', this.value)">${colOptions(m.currencyCol)}</select></label>` : ""}
     ${m.statusCol !== null ? `<div style="height:10px;"></div><label class="field">Būsenos stulpelis (aptikta — praleisim neįvykdytas)<select onchange="updateImportMapping('statusCol', this.value)">${colOptions(m.statusCol)}</select></label>` : ""}
     <label class="checkbox-field" style="margin-top:12px;"><input type="checkbox" ${m.allExpense?'checked':''} onchange="updateImportMapping('allExpense', this.checked)" /> Visos šio failo sumos yra išlaidos (ne pajamos)</label>
