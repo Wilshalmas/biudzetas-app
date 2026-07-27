@@ -894,6 +894,15 @@ function persistAll() {
   save("ruleSnapshots", state.ruleSnapshots);
   save("merchantMap", state.merchantMap);
   save("importedHashes", state.importedHashes);
+  save("holdings", state.holdings);
+  save("cryptoHoldings", state.cryptoHoldings);
+  save("finnhubApiKey", state.finnhubApiKey);
+  save("twelveDataApiKey", state.twelveDataApiKey);
+  save("stockPriceProvider", state.stockPriceProvider);
+  save("investmentCashBalance", state.investmentCashBalance);
+  save("pendingApprovals", state.pendingApprovals);
+  save("netWorthHistory", state.netWorthHistory);
+  save("csvMappingMemory", state.csvMappingMemory);
 }
 
 function incomeForMonth(monthKey, mode) {
