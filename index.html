@@ -171,6 +171,7 @@
   .rv-add .toggle-btn.active { background: rgba(124,92,252,0.16); }
   .rv-add .submit-btn { border-radius: 14px; }
   .rv-add .checkbox-field input[type="checkbox"] { accent-color: var(--rv-accent); }
+  .rv-add input[type="date"], .rv-theme input[type="date"], .rv-overview input[type="date"] { color-scheme: dark; }
 
   /* --- Bendra violetinės temos klasė, naudojama Taupymo/Investicijų/Suvestinės ekranuose.
      Tas pats principas kaip .rv-add: perrašo kintamuosius, ne kiekvieną klasę atskirai. */
@@ -786,6 +787,7 @@ let state = {
   pendingApprovals: load("pendingApprovals", []),
   investmentCashBalance: load("investmentCashBalance", 0),
   showAllocInvestCash: false,
+  showFixInvestCash: false,
   editingCryptoId: null,
   cryptoPriceRefreshing: false,
   taxCalc: { income: "", method: "30pct", actualExpenses: "", otherIncome: "", insuredElsewhere: false, firstYearRelief: false },
@@ -1240,6 +1242,7 @@ function proceedToReview() {
       save("csvMappingMemory", state.csvMappingMemory);
     }
     const drafts = [];
+    const seenInBatch = {};
     let skippedCurrency = 0, skippedStatus = 0, skippedBalance = 0;
     const balanceRowRe = /LIKUTIS|BALANCE\b/i;
     const toSavingsRe = /\bĮ\s*(E\.?\s*)?TAUPYKL/i;
@@ -1278,11 +1281,16 @@ function proceedToReview() {
       const isTransfer = !isSavingsRoundup && internalTransferRe.test(rawDesc);
       const suggested = isSavingsRoundup ? savingsGoalCategory : (suggestCategoryForMerchant(rawDesc) || state.categories[0]);
       const h = hashRow(date, absAmount, rawDesc);
+      // Tikrinam dublikatus ir PRIEŠ anksčiau importuotus įrašus, IR tarp tos pačios
+      // importuojamos eilės (pvz. jei banko išraše ta pati eilutė atsikartojo dėl
+      // persidengiančių laikotarpių) - abu atvejai paliekami matomi, bet nuimti varnele.
+      const isDuplicate = state.importedHashes.includes(h) || !!seenInBatch[h];
+      seenInBatch[h] = true;
       drafts.push({
         id: uid(), date, amount: absAmount, rawDesc: rawDesc || "", kind: isIncome && !isSavingsRoundup ? "income" : "expense",
         category: suggested, necessity: "reikalinga",
-        include: !state.importedHashes.includes(h) && !isTransfer,
-        duplicate: state.importedHashes.includes(h), transferSuspected: isTransfer, savingsRoundup: isSavingsRoundup, hash: h,
+        include: !isDuplicate && !isTransfer,
+        duplicate: isDuplicate, transferSuspected: isTransfer, savingsRoundup: isSavingsRoundup, hash: h,
       });
     });
     if (drafts.length === 0) { alert("Nepavyko atpažinti nė vieno įrašo. Patikrink stulpelių pasirinkimą."); return; }
@@ -1459,7 +1467,7 @@ function removeExpense(id) {
   const item = state.expenses[idx];
   if (item.fromSavings) state.savingsBalance += Number(item.amount);
   if (catType(item.category) === "savingsgoal") state.savingsBalance -= Number(item.amount);
-  if (catType(item.category) === "investment") state.investmentCashBalance -= Number(item.amount);
+  if (catType(item.category) === "investment") state.investmentCashBalance = Math.max(0, state.investmentCashBalance - Number(item.amount));
   state.expenses.splice(idx, 1);
   lastDeleted = { type: "expense", data: item, idx };
   persistAll(); render();
@@ -2161,7 +2169,7 @@ function submitAdd(ev) {
       if (fromSavings) state.savingsBalance -= amount;
       if (catType(old.category) === "savingsgoal") state.savingsBalance -= Number(old.amount);
       if (catType(fields.category) === "savingsgoal") state.savingsBalance += amount;
-      if (catType(old.category) === "investment") state.investmentCashBalance -= Number(old.amount);
+      if (catType(old.category) === "investment") state.investmentCashBalance = Math.max(0, state.investmentCashBalance - Number(old.amount));
       if (catType(fields.category) === "investment") state.investmentCashBalance += amount;
       state.expenses[idx] = { ...old, ...fields };
     }
@@ -2460,6 +2468,14 @@ function addCryptoHolding(coinId, units, invested) {
   persistAll(); render();
   showToast(`„${id}“ pridėtas/atnaujintas`);
 }
+function fixInvestmentCashBalance() {
+  const val = parseFloat((document.getElementById("fix_invest_cash").value || "0").replace(",", "."));
+  if (isNaN(val) || val < 0) { showToast("Įvesk teisingą, ne neigiamą sumą."); return; }
+  state.investmentCashBalance = val;
+  state.showFixInvestCash = false;
+  persistAll(); render();
+  showToast("Suma pataisyta");
+}
 function allocateInvestmentCash() {
   if (esuVaikoRoleje()) { showToast("Šią funkciją gali naudoti tik tėvai/mamos."); return; }
   const target = document.getElementById("alloc_target").value;
@@ -2718,6 +2734,38 @@ function netWorthTrendSVG() {
   return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:150px;display:block;">
     <line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${w-padR}" y2="${zeroY.toFixed(1)}" stroke="rgba(237,234,224,0.15)" stroke-width="1"/>
     <polyline points="${pathPts}" fill="none" stroke="#C9A227" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    ${labels}
+    <text x="${padL-6}" y="${padT+4}" fill="#8FA098" font-size="8" text-anchor="end">€${Math.round(maxVal)}</text>
+  </svg>`;
+}
+function portfolioTrendSVG() {
+  const points = state.netWorthHistory.slice(-12);
+  if (points.length < 2) {
+    return `<div style="font-size:12px;color:var(--faint);padding:20px 0;text-align:center;">Grafikas atsiras, kai turėsi bent 2 mėnesių įrašus. Portfelio vertė registruojama automatiškai kas mėnesį nuo šiol.</div>`;
+  }
+  const values = points.map(p => (p.portfolio||0) + (p.crypto||0));
+  const minVal = Math.min(0, ...values), maxVal = Math.max(1, ...values);
+  const range = maxVal - minVal || 1;
+  const w = 320, h = 140, padL = 44, padR = 10, padT = 12, padB = 20;
+  const plotW = w - padL - padR, plotH = h - padT - padB;
+  function xAt(i) { return padL + (i / (points.length - 1)) * plotW; }
+  function yAt(v) { return padT + plotH - ((v - minVal) / range) * plotH; }
+  const pathPts = values.map((v,i) => `${xAt(i).toFixed(1)},${yAt(v).toFixed(1)}`).join(" ");
+  const zeroY = yAt(0);
+  const labels = points.map((p,i) => {
+    if (points.length > 6 && i % 2 !== 0) return "";
+    const [,m] = p.monthKey.split("-");
+    return `<text x="${xAt(i).toFixed(1)}" y="${h-4}" fill="#8FA098" font-size="8" text-anchor="middle">${MONTH_NAMES[Number(m)-1].slice(0,3)}</text>`;
+  }).join("");
+  const first = values[0], last = values[values.length-1];
+  const changePct = first !== 0 ? ((last-first)/Math.abs(first))*100 : (last>0?100:0);
+  return `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
+    <span style="font-size:11px;color:var(--faint);">Paskutiniai ${points.length} mėn.</span>
+    <span class="tape" style="font-size:13px;color:${changePct>=0?'var(--green)':'var(--rust)'};">${changePct>=0?'+':''}${fmt(changePct)}%</span>
+  </div>
+  <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:150px;display:block;">
+    <line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${w-padR}" y2="${zeroY.toFixed(1)}" stroke="rgba(237,234,224,0.15)" stroke-width="1"/>
+    <polyline points="${pathPts}" fill="none" stroke="#7C5CFC" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
     ${labels}
     <text x="${padL-6}" y="${padT+4}" fill="#8FA098" font-size="8" text-anchor="end">€${Math.round(maxVal)}</text>
   </svg>`;
@@ -3410,6 +3458,11 @@ function renderFinance() {
   return `<div class="rv-theme"><div class="topbar"><div class="eyebrow">Investicijos</div></div>
   <div class="tabpanel fade-in">
 
+    <div class="section-label">Portfelio augimas</div>
+    <div class="tip-card" style="margin-bottom:16px;">
+      ${portfolioTrendSVG()}
+    </div>
+
     ${state.pendingApprovals && state.pendingApprovals.length > 0 ? `
       <div class="tip-card" style="border-left-color:var(--blue);margin-bottom:16px;">
         <div style="font-size:13px;font-weight:600;margin-bottom:6px;color:var(--blue);">Laukia tėvų patvirtinimo</div>
@@ -3431,9 +3484,18 @@ function renderFinance() {
         </div>
         <div style="display:flex;align-items:center;gap:10px;">
           <span class="tape" style="font-size:16px;">€${fmt(state.investmentCashBalance)}</span>
+          <button type="button" class="icon-btn" style="border:1px solid rgba(237,234,224,0.15);border-radius:14px;padding:5px 10px;font-size:12px;" onclick="state.showFixInvestCash = !state.showFixInvestCash; render();" aria-label="Pataisyti sumą">✎</button>
           ${state.investmentCashBalance > 0 ? `<button type="button" class="icon-btn" style="border:1px solid rgba(237,234,224,0.15);border-radius:14px;padding:5px 12px;font-size:12px;" onclick="state.showAllocInvestCash = !state.showAllocInvestCash; render();">${state.showAllocInvestCash ? "Uždaryti" : "Priskirti"}</button>` : ""}
         </div>
       </div>
+      ${state.showFixInvestCash ? `
+        <div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(237,234,224,0.1);">
+          <label class="field">Rankiniu būdu pataisyti sumą (jei skaičius netikslus)
+            <input id="fix_invest_cash" type="text" inputmode="decimal" value="${fmt(state.investmentCashBalance)}" />
+          </label>
+          <button type="button" class="submit-btn" style="background:var(--surface-light);color:var(--paper);" onclick="fixInvestmentCashBalance()">Išsaugoti sumą</button>
+        </div>
+      ` : ""}
       ${state.showAllocInvestCash && state.investmentCashBalance > 0 ? `
         <div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(237,234,224,0.1);">
           <label class="field">Ką nusipirkai už šiuos €${fmt(state.investmentCashBalance)}?
@@ -3457,6 +3519,9 @@ function renderFinance() {
 
     ${settingsSectionHeader('stocks', 'Investicijų portfelis', state.holdings.length ? `${state.holdings.length} laikym(ai/ų)` : 'Nėra pridėtų')}
     <div class="settings-collapse ${state.settingsExpanded['stocks']?'expanded':''}">
+
+    ${settingsSectionHeader('apikeys', 'API raktų nustatymai', state.stockPriceProvider === 'twelvedata' ? 'Twelve Data' : 'Finnhub')}
+    <div class="settings-collapse ${state.settingsExpanded['apikeys']?'expanded':''}">
     <div class="field-row">
       <span class="field-row-label">Pagrindinis kainų šaltinis</span>
     </div>
@@ -3471,6 +3536,7 @@ function renderFinance() {
 
     <label class="field">Twelve Data raktas<input type="text" value="${escapeHtml(state.twelveDataApiKey)}" placeholder="Įklijuok nemokamą raktą iš twelvedata.com" onchange="updateTwelveDataKey(this.value)" /></label>
     <div style="font-size:11px;color:var(--faint);margin-bottom:14px;">Padengia 50+ biržų (įsk. Europos, pvz. QDVE), bet nemokamas planas kai kurioms populiarioms JAV akcijoms (pvz. AAPL) gali rodyti „reikia Grow/Venture plano" — tokiu atveju Finnhub raktas (aukščiau) juos padengs kaip atsarginis šaltinis.</div>
+    </div>
 
     ${holdingRows || `<div class="empty">Nėra pridėtų laikymų.</div>`}
     <form class="stack" style="margin-top:12px;" onsubmit="return submitAddHolding(event)">
