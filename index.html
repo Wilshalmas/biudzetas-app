@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
 <title>Biudžeto knyga</title>
-<meta name="theme-color" content="#1B2420" />
+<meta name="theme-color" content="#0B0B0E" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Biudžetas" />
@@ -210,34 +210,35 @@
 </style>
 </head>
 <body>
-<div id="auth-screen" style="min-height:100vh; display:flex; align-items:center; justify-content:center; background:#0f1210; font-family:-apple-system,sans-serif; padding:20px;">
+<div id="auth-screen" style="min-height:100vh; display:flex; align-items:center; justify-content:center; background:#0B0B0E; font-family:-apple-system,sans-serif; padding:20px;">
   <div style="width:100%; max-width:360px;">
-    <h1 style="color:#eef1ee; font-size:22px; margin-bottom:6px; text-align:center;">Biudžeto knyga</h1>
-    <div id="auth-subtitle" style="color:#8a9490; font-size:13px; text-align:center; margin-bottom:20px;">Prisijunk prie savo paskyros</div>
+    <h1 style="color:#F5F5F7; font-size:22px; margin-bottom:6px; text-align:center;">Biudžeto knyga</h1>
+    <div id="auth-subtitle" style="color:#86868D; font-size:13px; text-align:center; margin-bottom:20px;">Prisijunk prie savo paskyros</div>
 
-    <div id="auth-klaida" style="display:none; background:#3a1f1f; color:#f3a; padding:10px 12px; border-radius:8px; margin-bottom:14px; font-size:14px;"></div>
+    <div id="auth-klaida" style="display:none; background:rgba(217,119,66,0.15); color:#E9AE65; padding:10px 12px; border-radius:8px; margin-bottom:14px; font-size:14px;"></div>
 
     <input id="auth-email" type="email" placeholder="El. paštas" autocomplete="username"
-      style="width:100%; padding:12px; margin-bottom:10px; border-radius:8px; border:1px solid #333; background:#1a1e1b; color:#eef1ee; font-size:15px; box-sizing:border-box;">
+      style="width:100%; padding:12px; margin-bottom:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.08); background:#18181D; color:#F5F5F7; font-size:15px; box-sizing:border-box;">
     <input id="auth-password" type="password" placeholder="Slaptažodis" autocomplete="current-password"
-      style="width:100%; padding:12px; margin-bottom:10px; border-radius:8px; border:1px solid #333; background:#1a1e1b; color:#eef1ee; font-size:15px; box-sizing:border-box;">
+      style="width:100%; padding:12px; margin-bottom:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.08); background:#18181D; color:#F5F5F7; font-size:15px; box-sizing:border-box;">
     <input id="auth-password2" type="password" placeholder="Pakartok slaptažodį" autocomplete="new-password"
-      style="width:100%; padding:12px; margin-bottom:14px; border-radius:8px; border:1px solid #333; background:#1a1e1b; color:#eef1ee; font-size:15px; box-sizing:border-box; display:none;">
+      style="width:100%; padding:12px; margin-bottom:14px; border-radius:8px; border:1px solid rgba(255,255,255,0.08); background:#18181D; color:#F5F5F7; font-size:15px; box-sizing:border-box; display:none;">
 
-    <button id="auth-submit-btn" style="width:100%; padding:12px; margin-bottom:14px; border-radius:8px; border:none; background:#42bf96; color:#0f1210; font-weight:600; font-size:15px;">Prisijungti</button>
+    <button id="auth-submit-btn" style="width:100%; padding:12px; margin-bottom:14px; border-radius:8px; border:none; background:#7C5CFC; color:#fff; font-weight:600; font-size:15px;">Prisijungti</button>
 
     <div style="text-align:center; margin-bottom:20px;">
-      <button id="auth-switch-btn" type="button" style="background:none; border:none; color:#8a9490; font-size:13px; text-decoration:underline; cursor:pointer; padding:4px;">Neturi paskyros? Susikurk</button>
+      <button id="auth-switch-btn" type="button" style="background:none; border:none; color:#86868D; font-size:13px; text-decoration:underline; cursor:pointer; padding:4px;">Neturi paskyros? Susikurk</button>
     </div>
 
-    <details style="color:#8a9490; font-size:13px;">
+    <details style="color:#86868D; font-size:13px;">
       <summary style="cursor:pointer;">Turiu senų duomenų iš ankstesnės programėlės versijos</summary>
       <p style="margin:10px 0;">Prisijunk pirmiausia, tada įkelk eksporto failą (žr. instrukciją, kaip jį susikurti):</p>
-      <input id="auth-import-file" type="file" accept="application/json" style="color:#8a9490;">
-      <button id="auth-import-btn" style="margin-top:10px; padding:8px 12px; border-radius:6px; border:1px solid #333; background:transparent; color:#eef1ee; font-size:13px;">Importuoti failą</button>
+      <input id="auth-import-file" type="file" accept="application/json" style="color:#86868D;">
+      <button id="auth-import-btn" style="margin-top:10px; padding:8px 12px; border-radius:6px; border:1px solid rgba(255,255,255,0.08); background:transparent; color:#F5F5F7; font-size:13px;">Importuoti failą</button>
     </details>
   </div>
 </div>
+
 
 <div class="app" id="app" style="display:none;"></div>
 
@@ -3477,13 +3478,13 @@ function renderFinance() {
 
     <div class="section-label">Investicinė sąskaita</div>
     <div class="tip-card" style="margin-bottom:16px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div>
-          <div style="font-weight:600;">💼 Nepriskirti pinigai</div>
-          <div style="font-size:12px;color:var(--faint);">${state.investmentCashBalance > 0 ? "Laukia priskyrimo konkrečiai akcijai/kriptai" : 'Kaupiasi automatiškai, kai pridedi išlaidą su „Investavimas" tipo kategorija'}</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <span class="tape" style="font-size:16px;">€${fmt(state.investmentCashBalance)}</span>
+      <div style="margin-bottom:10px;">
+        <div style="font-weight:600;">💼 Nepriskirti pinigai</div>
+        <div style="font-size:12px;color:var(--faint);">${state.investmentCashBalance > 0 ? "Laukia priskyrimo konkrečiai akcijai/kriptai" : 'Kaupiasi automatiškai, kai pridedi išlaidą su „Investavimas" tipo kategorija'}</div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <span class="tape" style="font-size:16px;">€${fmt(state.investmentCashBalance)}</span>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
           <button type="button" class="icon-btn" style="border:1px solid rgba(237,234,224,0.15);border-radius:14px;padding:5px 10px;font-size:12px;" onclick="state.showFixInvestCash = !state.showFixInvestCash; render();" aria-label="Pataisyti sumą">✎</button>
           ${state.investmentCashBalance > 0 ? `<button type="button" class="icon-btn" style="border:1px solid rgba(237,234,224,0.15);border-radius:14px;padding:5px 12px;font-size:12px;" onclick="state.showAllocInvestCash = !state.showAllocInvestCash; render();">${state.showAllocInvestCash ? "Uždaryti" : "Priskirti"}</button>` : ""}
         </div>
