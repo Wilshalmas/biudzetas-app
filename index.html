@@ -3582,12 +3582,56 @@ function renderFinance() {
     <button type="button" class="submit-btn" style="background:var(--surface-light);color:var(--paper);" ${state.cryptoPriceRefreshing?'disabled':''} onclick="refreshCryptoPrices()">${state.cryptoPriceRefreshing ? "Atnaujinama…" : "Atnaujinti kripto kainas"}</button>
     </div>
 
-    <div class="section-label" style="margin-top:22px;">Skolos, taisyklės ir skaičiuoklės</div>
+    <div class="section-label" style="margin-top:22px;">Skolos</div>
+    ${(() => {
+      const loanCats = state.categories.filter(c => catType(c) === "loan").filter(c => loanRemaining(c) > 0);
+      const totalRemaining = loanCats.reduce((s,c) => s + loanRemaining(c), 0);
+      const strategy = state.debtStrategy || "snowball";
+      const sorted = [...loanCats].sort((a,b) => {
+        if (strategy === "avalanche") {
+          const ra = Number((state.categoryConfig[a]||{}).interestRate)||0, rb = Number((state.categoryConfig[b]||{}).interestRate)||0;
+          return rb - ra;
+        }
+        return loanRemaining(a) - loanRemaining(b);
+      });
+      return `${settingsSectionHeader('debts', 'Skolų valdymas', loanCats.length ? `€${fmt(totalRemaining)} liko (${loanCats.length})` : 'Nėra aktyvių paskolų')}
+      <div class="settings-collapse ${state.settingsExpanded['debts']?'expanded':''}">
+      ${loanCats.length === 0 ? `<div class="empty">Kai sukursi paskolos tipo kategoriją (Bendra → ⚙ → Kategorijos), čia matysi bendrą skolų vaizdą.</div>` : `
+        <div class="tip-card" style="text-align:center;margin-bottom:14px;">
+          <div style="font-size:12px;color:var(--faint);margin-bottom:4px;">Iš viso liko grąžinti</div>
+          <div class="tape" style="font-size:22px;font-weight:700;">€${fmt(totalRemaining)}</div>
+        </div>
+        <div class="section-label" style="margin-top:0;">Kaip paskirstyta tarp paskolų</div>
+        ${sorted.map(c => {
+          const rem = loanRemaining(c);
+          const pct = totalRemaining > 0 ? (rem/totalRemaining)*100 : 0;
+          return `<div class="ledger-row" style="padding:8px 0;">
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">
+              <span>${catEmoji(c)}${escapeHtml(c)}</span><span class="tape">€${fmt(rem)}</span>
+            </div>
+            <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:var(--blue);"></div></div>
+          </div>`;
+        }).join("")}
+        <div class="section-label">Mokėjimo eiliškumo strategija</div>
+        <div class="toggle-row" style="margin-bottom:10px;">
+          <button type="button" class="toggle-btn ${strategy!=='avalanche'?'active blue':''}" onclick="state.debtStrategy='snowball';persistAll();render();">Sniego gniūžtė</button>
+          <button type="button" class="toggle-btn ${strategy==='avalanche'?'active blue':''}" onclick="state.debtStrategy='avalanche';persistAll();render();">Lavina</button>
+        </div>
+        <div style="font-size:11px;color:var(--faint);margin-bottom:10px;">Sniego gniūžtė: pirma moki mažiausią skolą (greitas laimėjimas). Lavina: pirma moki ten, kur didžiausios palūkanos (mažiausia permoka).</div>
+        <label class="field">Papildoma suma, kurią gali skirti skoloms šį mėnesį (€)
+          <input id="extra_debt_amount" type="text" inputmode="decimal" placeholder="pvz. 50" />
+        </label>
+        <button type="button" class="submit-btn" style="margin-top:8px;background:var(--blue);padding:9px 0;font-size:13px;" onclick="applyDebtStrategy()">Nukreipti į „${escapeHtml(sorted[0])}"</button>
+      `}
+      </div>`;
+    })()}
+
+    <div class="section-label" style="margin-top:22px;">Taisyklės ir skaičiuoklės</div>
     <div class="tip-card" style="cursor:pointer;" onclick="state.showFinanceRules=true;render();">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <div>
           <div style="font-weight:600;margin-bottom:2px;">Peržiūrėti visas taisykles ir skaičiuokles</div>
-          <div style="color:var(--faint);font-size:12px;">Skolų strategija, avarinis fondas, 50/30/20, pirkinio skaičiuoklė ir kt.</div>
+          <div style="color:var(--faint);font-size:12px;">Avarinis fondas, 50/30/20, pirkinio skaičiuoklė ir kt.</div>
         </div>
         <span style="color:var(--faint);">›</span>
       </div>
