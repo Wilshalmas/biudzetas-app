@@ -3601,27 +3601,33 @@ function renderFinance() {
           <div style="font-size:12px;color:var(--faint);margin-bottom:4px;">Iš viso liko grąžinti</div>
           <div class="tape" style="font-size:22px;font-weight:700;">€${fmt(totalRemaining)}</div>
         </div>
-        <div class="section-label" style="margin-top:0;">Kaip paskirstyta tarp paskolų</div>
-        ${sorted.map(c => {
+        <div class="section-label" style="margin-top:0;">Mokėjimo eilė (${strategy === "avalanche" ? "Lavina — didžiausios palūkanos pirma" : "Sniego gniūžtė — mažiausia skola pirma"})</div>
+        ${sorted.map((c,i) => {
           const rem = loanRemaining(c);
-          const pct = totalRemaining > 0 ? (rem/totalRemaining)*100 : 0;
+          const total = loanTotalFor(c);
+          const paidPct = total > 0 ? Math.min(100, ((total-rem)/total)*100) : 0;
+          const minPay = Number((state.categoryConfig[c]||{}).minPayment) || 0;
+          const monthsLeft = minPay > 0 ? Math.ceil(rem / minPay) : null;
           return `<div class="ledger-row" style="padding:8px 0;">
-            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">
-              <span>${catEmoji(c)}${escapeHtml(c)}</span><span class="tape">€${fmt(rem)}</span>
+            <div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;margin-bottom:4px;">
+              <span>${i===0?'<span class="cat-tag" style="color:var(--blue);border-color:var(--blue);margin-right:6px;">prioritetas</span>':`<span style="color:var(--faint);">${i+1}.</span> `}${catEmoji(c)}${escapeHtml(c)}</span>
+              <span class="tape">€${fmt(rem)}${total>0?` / €${fmt(total)}`:''}</span>
             </div>
-            <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:var(--blue);"></div></div>
+            <div class="bar-track"><div class="bar-fill" style="width:${paidPct}%;background:var(--green);"></div></div>
+            <div style="font-size:11px;color:var(--faint);margin-top:4px;">${total>0?`${Math.round(paidPct)}% jau grąžinta`:'Nenurodyta bendra suma — juosta neskaičiuojama'}${monthsLeft!==null?` · ≈${monthsLeft} mėn. iki nulio prie dabartinės įmokos`:''}</div>
           </div>`;
         }).join("")}
-        <div class="section-label">Mokėjimo eiliškumo strategija</div>
+        <div style="font-size:11px;color:var(--faint);margin:10px 0;">Žalia juosta = kiek TOS konkrečios paskolos jau grąžinta (ne dalis nuo visų skolų). Pakeitus strategiją, pasikeičia tik eiliškumas, kuriai paskolai skirsi papildomus pinigus — savaime tai laiko/permokos nesumažina, kol realiai nenukreipsi papildomos sumos į prioritetinę paskolą (mygtukas žemiau).</div>
+        <div class="section-label">Strategija</div>
         <div class="toggle-row" style="margin-bottom:10px;">
           <button type="button" class="toggle-btn ${strategy!=='avalanche'?'active blue':''}" onclick="state.debtStrategy='snowball';persistAll();render();">Sniego gniūžtė</button>
           <button type="button" class="toggle-btn ${strategy==='avalanche'?'active blue':''}" onclick="state.debtStrategy='avalanche';persistAll();render();">Lavina</button>
         </div>
-        <div style="font-size:11px;color:var(--faint);margin-bottom:10px;">Sniego gniūžtė: pirma moki mažiausią skolą (greitas laimėjimas). Lavina: pirma moki ten, kur didžiausios palūkanos (mažiausia permoka).</div>
+        <div style="font-size:11px;color:var(--faint);margin-bottom:10px;">Sniego gniūžtė: pirma moki mažiausią skolą (greitas laimėjimas). Lavina: pirma moki ten, kur didžiausios palūkanos (mažiausia permoka ilgainiui).</div>
         <label class="field">Papildoma suma, kurią gali skirti skoloms šį mėnesį (€)
           <input id="extra_debt_amount" type="text" inputmode="decimal" placeholder="pvz. 50" />
         </label>
-        <button type="button" class="submit-btn" style="margin-top:8px;background:var(--blue);padding:9px 0;font-size:13px;" onclick="applyDebtStrategy()">Nukreipti į „${escapeHtml(sorted[0])}"</button>
+        <button type="button" class="submit-btn" style="margin-top:8px;background:var(--blue);padding:9px 0;font-size:13px;" onclick="applyDebtStrategy()">Nukreipti į „${escapeHtml(sorted[0])}" (padidins jos mėn. įmoką, taip greitina grąžinimą)</button>
       `}
       </div>`;
     })()}
@@ -4726,60 +4732,60 @@ function renderHelp() {
     <button class="icon-btn" onclick="state.showHelp=false;render();" aria-label="Uždaryti">${ICONS.x}</button>
   </div>
   <div class="tabpanel fade-in">
-    <div style="font-size:13px;color:var(--faint);margin-bottom:14px;">Programėlė turi 6 skirtukus apačioje. Paspausk ant temos, kad paskaitytum, ką ji daro.</div>
+    <div style="font-size:13px;color:var(--faint);margin-bottom:14px;">Programėlė turi 5 skirtukus apačioje, ir ⚙ mygtuką viršuje dešinėje (Nustatymai — pasiekiamas iš bet kurio ekrano). Paspausk ant temos, kad paskaitytum, ką ji daro.</div>
 
-    ${topic('overview', '📊 Apžvalga — kur matai savo mėnesį',
-      `Viršuje — indikatorius (žiedas arba kuro bako rodyklė, keičiama Finansai skirtuke). Spalvos: <b>žalia</b> — biudžetas gerai, <b>geltona</b> — artėji prie limito, <b>raudona</b> — viršyta.<br><br>
-      Žemiau — kiekvienos kategorijos juosta su suma. <b>Bakstelėk kategoriją</b>, kad sąrašas žemiau rodytų tik jos įrašus.<br><br>
-      Toliau — Pajamos, Investuota, Taupymo tikslai, Santaupos, ir „Iš viso paskirstyta” (parodo, ar planuoji išleisti/investuoti/taupyti daugiau, nei uždirbi).<br><br>
-      Apačioje — visi šio mėnesio įrašai. Gali <b>ieškoti</b> (rodys rezultatus ir iš kitų mėnesių), arba <b>perbraukti</b> įrašą kairėn (ištrinti) ar dešinėn (redaguoti) — arba tiesiog naudoti mygtukus.`
+    ${topic('overview', '◆ Bendra — kur matai savo mėnesį',
+      `Viršuje — didelis balansas ir progreso juosta iki mėnesio biudžeto. Keturios kortelės: Pajamos, Investuota, Taupymo tikslai, Santaupos.<br><br>
+      Žemiau — kiekvienos kategorijos juosta su suma. <b>Bakstelėk kategoriją</b>, kad matytum jos konkrečius įrašus (puslapis pats nuslinks iki jų). Prie "Pagal kategoriją" antraštės — mažas ⚙, kuriuo greitai patenki į kategorijų tvarkymą Nustatymuose.<br><br>
+      Apačioje — <b>paieška</b> ir šio mėnesio įrašų sąrašas. Gali perbraukti įrašą kairėn (ištrinti) ar dešinėn (redaguoti), arba naudoti mygtukus.`
     )}
 
-    ${topic('add', '➕ Pridėti — nauja išlaida ar pajama',
+    ${topic('add', '+ Pridėti — nauja išlaida ar pajama',
       `Du pomygtukai viršuje: <b>Išlaidos</b> / <b>Pajamos</b>.<br><br>
-      Pridedant išlaidą: suma, kategorija (viršuje rodomos 3 dažniausiai naudotos, kaip greiti mygtukai), data, pastaba, ir „Reikalinga/Nereikalinga” (naudinga vėliau matant, kiek išleidi nebūtiniems dalykams).<br><br>
-      <b>„Apmokėta iš santaupų”</b> — pažymėk, kai mokate iš anksčiau sutaupytų pinigų (pvz. kelionėje), ne iš šio mėnesio algos. Tokia suma <b>neįskaičiuojama</b> į mėnesio biudžetą, bet vis tiek matoma sąraše. Gali pridėti kelionės/įvykio pavadinimą, kad vėliau matytum, kiek iš viso išleidai konkrečiam įvykiui (Finansai → Santaupos).`
+      Pridedant išlaidą: suma, kategorija (viršuje rodomos dažniausiai naudotos kaip greiti mygtukai), data, pastaba, „Reikalinga/Nereikalinga” žymė.<br><br>
+      <b>„Apmokėta iš santaupų”</b> — pažymėk, kai mokate iš anksčiau sutaupytų pinigų. Tokia suma <b>neįskaičiuojama</b> į mėnesio biudžetą. Gali pridėti kelionės/įvykio pavadinimą, kad vėliau matytum, kiek iš viso jam išleista (Taupymas skiltyje).<br><br>
+      Pridedant pajamas — pasirenki rūšį iš sąrašo arba „Kita (įvesk pati)”.`
     )}
 
-    ${topic('report', '📈 Ataskaita — mėnesio ir metų suvestinė',
-      `Viršuje perjungiklis <b>Mėnuo / Metai</b>.<br><br>
-      <b>Mėnesio</b> rodo: pajamas, išlaidas, investicijas, likutį, automatinius patarimus (tempo prognozė, didžiausia išlaida, savaitgalio tendencija ir kt.), kategorijų sąrašą, TOP 3 išlaidas. Jei Finansuose nustatei savo biudžeto mėnesio pradžios dieną (pvz. jei alga ateina 15-ą, ne 1-ą), čia gali rinktis tarp „Mano mėnuo” ir „Kalendorinis”.<br><br>
-      <b>Metų</b> viršuje visada rodo <b>Grynąjį turtą</b> (santaupos + investicijos + taupymo tikslai + akcijų/kripto portfeliai − skolos) su tendencijos grafiku, kuris kaupiasi automatiškai kas mėnesį nuo tada, kai pradėjai naudoti šią versiją. Žemiau — metinės sumos ir mėnesių sąrašas.`
+    ${topic('savings', '◔ Taupymas — tikslai ir santaupos',
+      `Taupymo tikslų sąrašas su progresu — kad prisidėtum, tiesiog pridėk išlaidą tos pačios kategorijos skiltyje „Pridėti”.<br><br>
+      Prie „Taupymo tikslai” antraštės — ⚙, veda į kategorijų tvarkymą, kur gali sukurti naują tikslą.<br><br>
+      <b>Santaupos</b> — nustatai savo tikrą santaupų sumą rankiniu būdu; ji automatiškai sumažėja, kai pažymi išlaidą kaip „apmokėta iš santaupų”. Jei turi kelis tikslus, matai, kaip santaupų suma tarp jų paskirstyta.`
     )}
 
-    ${topic('rules', '📐 Taisyklės — finansų sveikatos įrankiai',
-      `<b>50/30/20 taisyklė</b> — varnelė, kuri iškart perskirsto tavo „lanksčių” kategorijų biudžetus (50% būtina/30% norai/20% taupymas). Atžymėjus — grąžina, kaip buvo.<br><br>
-      <b>Skolų strategija</b> — jei turi kelias paskolas, pasirenki „Sniego gniūžtę” (mažiausia skola pirma) arba „Lavina” (didžiausios palūkanos pirma), ir gali papildomą sumą nukreipti į pirmą eilėje esančią paskolą.<br><br>
-      <b>Avarinis fondas</b> — palygina tavo santaupas su rekomenduojama 3 mėn. būtinų išlaidų suma.<br><br>
-      <b>Informaciniai tekstukai</b> (automobilio, būsto, nuomos, pensijos taisyklės, akcijų mokesčiai) — paspaudus išsiskleidžia išsamesnis paaiškinimas.<br><br>
-      <b>Skaičiuoklės</b> — naujo pirkinio/paskolos saugumo įvertinimas (pagal tavo tikras pajamas) ir individualios veiklos mokesčių įvertinimas (GPM/VSD/PSD), pastarasis — po informaciniu tekstu apie tuos mokesčius.<br><br>
-      <span style="color:var(--gold);">Visos skaičiuoklės ir mokesčių info yra įvertinimai planavimui, ne oficialus patarimas — svarbiems sprendimams patikrink su specialistu.</span>`
+    ${topic('finance', '▲ Investicijos — akcijos, kripto, skolos',
+      `<b>Portfelio augimas</b> — grafikas viršuje, kaupiasi automatiškai kas mėnesį.<br><br>
+      <b>Investicinė sąskaita</b> — kai pridedi išlaidą su „Investicinė” tipo kategorija, suma čia kaupiasi kaip nepriskirti pinigai. Paspaudus „Priskirti” — pasirenki, ką už juos nusipirkai (naują ar esamą poziciją). Šalia sumos — ✎ mygtukas, jei kada reikėtų rankiniu būdu pataisyti skaičių.<br><br>
+      <b>Investicijų portfelis</b> — API raktai (Finnhub JAV akcijoms, Twelve Data platesnei aprėpčiai) paslėpti savo išskleidžiamame bloke. Gali įvesti abu — jei vienas nerastų kainos, programėlė pati pabando per kitą. Taip pat gali importuoti brokerio CSV.<br><br>
+      <b>Kriptovaliutų portfelis</b> — kainos iš CoinGecko, be jokio rakto. Įvesk CoinGecko ID (pvz. „bitcoin”, ne „BTC”).<br><br>
+      <b>Skolų valdymas</b> — bendra likusi suma, kiekvienos paskolos individualus grąžinimo progresas (žalia juosta = kiek TOS paskolos jau grąžinta), apytikslis mėnesių skaičius iki nulio, ir mokėjimo strategija (Sniego gniūžtė / Lavina), kuri nustato, kuriai paskolai pirmiausia skirsi papildomus pinigus.<br><br>
+      <b>Taisyklės ir skaičiuoklės</b> — mygtukas atidaro visą biudžeto metodikų biblioteką (50/30/20, avarinis fondas, pirkinio saugumo skaičiuoklė, individualios veiklos mokesčių įvertinimas ir kt.).`
     )}
 
-    ${topic('finance', '💰 Finansai — pasikartojantys mokėjimai, importas, turtas',
-      `Šiame skirtuke viskas suskleista pagal temą — paspausk antraštę, kad atsivertų:<br><br>
-      <b>Pasikartojančios išlaidos/pajamos</b> — nustatai kartą (pvz. nuoma, alga), programėlė pati prideda kiekvieno naujo mėnesio pradžioje.<br><br>
-      <b>Galimos prenumeratos</b> — paspaudus „Ieškoti”, programėlė pati suranda mokėjimus, kurie kartojasi bent 3 mėnesius, ir siūlo paversti juos pasikartojančiomis (biudžeto limitas nesikeičia, tik automatizuojamas įvedimas).<br><br>
-      <b>Banko išrašo importas</b> — įkelk CSV failą iš banko, priskirk stulpelius (data/suma/aprašymas), programėlė pasiūlys kategorijas pagal žinomas parduotuves.<br><br>
-      <b>Investicijų portfelis</b> — įvedi Finnhub API raktą (nemokamas), pridedi akcijas (tikslas, vienetai, investuota suma) arba importuoji brokerio CSV (Trading 212, Revolut ir kt.) — programėlė susumuoja pirkimus automatiškai.<br><br>
-      <b>Kriptovaliutų portfelis</b> — tas pats principas, bet kainos iš CoinGecko, be jokio rakto. Įvesk CoinGecko ID (pvz. „bitcoin”, ne „BTC”).<br><br>
-      <b>Atsarginė kopija</b> — eksportuok visus duomenis (JSON, atkūrimui) arba CSV (Excel/Sheets analizei).<br><br>
-      <b>Mano biudžeto mėnuo, Santaupos, Pajamų bazė</b> — bendri nustatymai, veikiantys visoje programėlėje (aprašyta atitinkamuose skirtukuose aukščiau).`
+    ${topic('report', '▤ Suvestinė — mėnesio ir metų analizė',
+      `Viršuje perjungiklis <b>Mėnuo / Metai</b>, su rodyklėmis naršyti į praeitį.<br><br>
+      <b>Mėnesio</b> rodo: pajamas, išlaidas, likutį, automatinius patarimus, <b>palyginimą su praėjusiu mėnesiu</b> pagal kategoriją, TOP 3 išlaidas.<br><br>
+      <b>Metų</b> rodo Grynąjį turtą (santaupos + investicijos + portfeliai − skolos) su tendencijos grafiku.<br><br>
+      Bet kuriame naršomame mėnesyje — mygtukas <b>„Peržiūrėti / tvarkyti”</b> parodo visus to laikotarpio įrašus su galimybe ištrinti — naudinga, jei importas ką nors sudubliavo.`
     )}
 
-    ${topic('settings', '⚙️ Nustatymai — kategorijos ir išvaizda',
-      `<b>Keturi kategorijų tipai:</b><br>
-      • <b>Išlaidų</b> — įprastas mėnesio biudžeto limitas. Gali būti „būtina” (nesikeičia nuo pajamų svyravimų) arba „lanksti”.<br>
-      • <b>Investicinė</b> — mėnesio įnašo tikslas augančiam turtui (akcijos, fondai). Žalia = tikslas pasiektas. Skaičiuojama į Grynąjį turtą.<br>
-      • <b>Taupymo tikslas</b> — panašiai kaip investicinė, bet konkrečiam dalykui (kelionė, pirkinys), ne augimui. Gali nurodyti bendrą sumą ir/ar datą — programėlė paskaičiuos, kiek reikia atidėti per mėnesį (arba tiesiog kiek liko iki tikslo, jei datos nenurodei).<br>
-      • <b>Paskola</b> — mažėjanti skola su minimaline mėnesio įmoka, kuri įskaičiuojama į biudžetą. Žalia = įmoka sumokėta, raudona = ne. Rodo projektuojamą datą, kada būsi be skolos.<br><br>
-      <b>Tvarkyti</b> mygtukas — leidžia keisti kategorijų eiliškumą rodyklytėmis.<br><br>
-      <b>Išvaizda ir sauga</b> — indikatoriaus stilius (žiedas/rodyklė), tema (tamsi/šviesi/auto), ir programėlės PIN užraktas (4 skaitmenys, 3 bandymai, tada 30 sek. pauzė — <b>jei pamirši PIN, atkūrimo nėra</b>, tik naršyklės duomenų išvalymas, prarandant viską be atsarginės kopijos).`
+    ${topic('settings', '⚙ Nustatymai — kategorijos, Šeima, duomenys',
+      `Pasiekiami iš bet kurio ekrano paspaudus ⚙ viršuje dešinėje. Uždarius — grąžina tave į tą skiltį, kurioje buvai.<br><br>
+      <b>Keturi kategorijų tipai:</b><br>
+      • <b>Išlaidų</b> — įprastas mėnesio biudžeto limitas.<br>
+      • <b>Investicinė</b> — mėnesio įnašo tikslas, kaupiasi Investicinėje sąskaitoje (Investicijos skiltyje).<br>
+      • <b>Taupymo tikslas</b> — konkrečiam dalykui, matomas Taupymo skiltyje.<br>
+      • <b>Paskola</b> — mažėjanti skola, matoma Investicijų → Skolų valdymo bloke.<br>
+      Esamos kategorijos tipą gali pakeisti bet kada — atsidaryk kategoriją redagavimui (pieštuko ikona) ir pasirink kitą tipą.<br><br>
+      <b>Duomenys</b> — pasikartojančios operacijos, prenumeratų aptikimas, CSV importas, atsarginė kopija (JSON/CSV eksportas).<br><br>
+      <b>Šeima</b> — šeimos paskyros kūrimas/prisijungimas, narių valdymas.<br><br>
+      <b>Sauga</b> — PIN užraktas (4 skaitmenys, 3 bandymai, tada 30 sek. pauzė).`
     )}
 
     ${topic('security', '🔒 Duomenų saugumas',
-      `Visi duomenys saugomi <b>tik šiame telefone/naršyklėje</b> (naudojant IndexedDB) — niekas kitas jų nemato, jokie duomenys niekur nesiunčiami, išskyrus akcijų/kripto kainų užklausas (kai pats paspaudi „Atnaujinti kainas”) ir bendrą CSV/rinkos taisyklių paiešką.<br><br>
-      <b>Rekomenduojame reguliariai daryti atsarginę kopiją</b> (Finansai → Atsarginė kopija → Eksportuoti) — jei telefonas sugestų, naršyklė būtų išvalyta, ar pamirštum PIN, tai vienintelis būdas atkurti duomenis.`
+      `Duomenys saugomi <b>saugiai serveryje</b> (ne tik šiame telefone) ir susieti su tavo asmenine paskyra — gali prisijungti iš bet kurio įrenginio ir matysi tuos pačius duomenis. Prisijungimas — slaptažodžiu, o sesija saugoma apsaugotame slapuke.<br><br>
+      Investicijų/kriptos kainų užklausos vyksta tiesiai iš tavo naršyklės į pasirinktą kainų šaltinį (Finnhub/Twelve Data/CoinGecko) — tavo API raktas niekada nekeliauja per mūsų serverį.<br><br>
+      <b>Vis tiek rekomenduojame</b> retkarčiais pasidaryti atsarginę kopiją (Nustatymai → Duomenys → Atsarginė kopija → Eksportuoti) — papildoma apsauga, jei kada prireiktų.`
     )}
   </div>`;
 }
