@@ -651,9 +651,11 @@ const storage = {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ value }),
       });
-      if (!res.ok) { praneztiSyncKlaida(); }
+      if (!res.ok) { praneztiSyncKlaida(); return false; }
+      return true;
     } catch (_) {
       praneztiSyncKlaida();
+      return false;
     }
   },
 };
@@ -1245,7 +1247,7 @@ function proceedToReview() {
     const drafts = [];
     const seenInBatch = {};
     let skippedCurrency = 0, skippedStatus = 0, skippedBalance = 0;
-    const balanceRowRe = /LIKUTIS|BALANCE\b/i;
+    const balanceRowRe = /LIKUTIS|BALANCE\b|APYVARTA/i;
     const toSavingsRe = /\bĮ\s*(E\.?\s*)?TAUPYKL/i;
     const internalTransferRe = /REVOLUT|E\.?\s*TAUPYKL|TAUPYKL[EĖ]|SAVO\s+S[AĄ]SKAIT|TARP\s+S[AĄ]SKAIT/i;
     const savingsGoalCategory = state.categories.find(c => catType(c) === "savingsgoal");
@@ -2364,7 +2366,7 @@ function allTimeLoanRemainingTotal() {
 function esuVaikoRoleje() {
   return !!(state.familyInfo && state.familyInfo.mano_role === "child");
 }
-function addHolding(ticker, units, invested) {
+async function addHolding(ticker, units, invested) {
   const sym = String(ticker||"").trim().toUpperCase();
   const u = parseFloat(String(units).replace(",",".")) || 0;
   const inv = parseFloat(String(invested).replace(",",".")) || 0;
@@ -2378,8 +2380,12 @@ function addHolding(ticker, units, invested) {
   const existing = state.holdings.find(h => h.ticker === sym);
   if (existing) { existing.units += u; existing.invested += inv; }
   else state.holdings.push({ id: uid(), ticker: sym, units: u, invested: inv, lastPrice: null, lastPriceAt: null, priceError: null });
-  persistAll(); render();
-  showToast(`„${sym}“ pridėtas/atnaujintas`);
+  render();
+  persistAll();
+  // Papildomas, tiesiogiai patikrinamas issaugojimas BUTENT sioms akcijoms - kad
+  // gautume aiskia klaida, jei issaugojimas nepavyktu, o ne tylu duomenu praradima.
+  const issaugota = await storage.set("holdings", state.holdings);
+  if (issaugota) showToast(`„${sym}“ pridėtas/atnaujintas`);
 }
 function deleteHolding(id) {
   if (!confirm("Ištrinti šį laikymą?")) return;
@@ -2452,7 +2458,7 @@ async function refreshHoldingPrices() {
   persistAll(); render();
   showToast("Kainos atnaujintos");
 }
-function addCryptoHolding(coinId, units, invested) {
+async function addCryptoHolding(coinId, units, invested) {
   const id = String(coinId||"").trim().toLowerCase();
   const u = parseFloat(String(units).replace(",",".")) || 0;
   const inv = parseFloat(String(invested).replace(",",".")) || 0;
@@ -2466,8 +2472,10 @@ function addCryptoHolding(coinId, units, invested) {
   const existing = state.cryptoHoldings.find(h => h.coinId === id);
   if (existing) { existing.units += u; existing.invested += inv; }
   else state.cryptoHoldings.push({ id: uid(), coinId: id, units: u, invested: inv, lastPrice: null, lastPriceAt: null, priceError: null });
-  persistAll(); render();
-  showToast(`„${id}“ pridėtas/atnaujintas`);
+  render();
+  persistAll();
+  const issaugota = await storage.set("cryptoHoldings", state.cryptoHoldings);
+  if (issaugota) showToast(`„${id}“ pridėtas/atnaujintas`);
 }
 function fixInvestmentCashBalance() {
   const val = parseFloat((document.getElementById("fix_invest_cash").value || "0").replace(",", "."));
