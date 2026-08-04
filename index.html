@@ -443,7 +443,7 @@ const STARTER_MERCHANTS = [
   { keywords: ["MANO BILIETAS", "VILNIUS VIESASIS", "VVT", "KELEIVINIS TRANSPORTAS"], category: "Transportas" },
   { keywords: ["DEPO"], category: "Kita" },
   { keywords: ["SENUKAI", "SENUKU"], category: "Kita" },
-  { keywords: ["LOTO.LT", "LOTO LT"], category: "Kita" },
+  { keywords: ["LOTO.LT", "LOTO LT", "LOTO"], category: "Kita" },
   { keywords: ["PASKOLOS PALŪKANOS", "PASKOLOS PALUKANOS", "SUKAUPTOS PALŪKANOS", "SUKAUPTOS PALUKANOS"], category: "Skolos" },
   { keywords: ["APOTHEKA"], category: "Sveikata" },
   { keywords: ["EUROVAISTINE"], category: "Sveikata" },
@@ -695,6 +695,31 @@ function suggestCategoryForMerchant(rawDesc) {
   return null;
 }
 
+let catSuggestionTimer = null;
+function checkCategorySuggestion() {
+  clearTimeout(catSuggestionTimer);
+  catSuggestionTimer = setTimeout(() => {
+    const noteEl = document.getElementById("f_note");
+    const catEl = document.getElementById("f_category");
+    const box = document.getElementById("cat_suggestion");
+    if (!noteEl || !catEl || !box) return;
+    const text = noteEl.value.trim();
+    if (text.length < 2) { box.innerHTML = ""; return; }
+    const suggested = suggestCategoryForMerchant(text);
+    if (!suggested || suggested === catEl.value) { box.innerHTML = ""; return; }
+    box.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--surface-light);border-radius:8px;padding:8px 12px;margin:-8px 0 12px;font-size:12.5px;">
+      <span>Siūloma kategorija: <b>${catEmoji(suggested)}${escapeHtml(suggested)}</b></span>
+      <button type="button" class="submit-btn" style="width:auto;padding:5px 12px;font-size:12px;" onclick="applyCategorySuggestion('${escapeHtml(suggested).replace(/'/g, "\\'")}')">Taikyti</button>
+    </div>`;
+  }, 400);
+}
+function applyCategorySuggestion(category) {
+  const catEl = document.getElementById("f_category");
+  if (catEl) catEl.value = category;
+  const box = document.getElementById("cat_suggestion");
+  if (box) box.innerHTML = "";
+}
+
 function budgetStartDay() { return Math.min(28, Math.max(1, Number(state.budgetStartDay) || 1)); }
 function budgetMonthKeyForDate(dateStr) {
   const startDay = budgetStartDay();
@@ -833,6 +858,8 @@ let state = {
   appPin: load("appPin", null),
   appLocked: false,
   pinAttempts: 0,
+  showPinRecovery: false,
+  pinRecoveryError: null,
   pinLockedUntil: null,
   reportMode: "month",
   reportYear: new Date().getFullYear(),
@@ -2014,7 +2041,8 @@ function renderAdd() {
         <select id="f_category">${state.categories.map(c=>`<option value="${c}" ${exp&&exp.category===c?'selected':''}>${c}${catType(c)==='investment'?' (investicija)':''}</option>`).join("")}</select>
       </label>
       <label class="field">Data<input id="f_date" type="date" value="${exp?exp.date:new Date().toISOString().slice(0,10)}" /></label>
-      <label class="field">Pastaba (nebūtina)<input id="f_note" type="text" placeholder="pvz. kavinė su draugais" value="${exp?escapeHtml(exp.note||''):''}" /></label>
+      <label class="field">Pastaba (nebūtina)<input id="f_note" type="text" placeholder="pvz. kavinė su draugais" value="${exp?escapeHtml(exp.note||''):''}" oninput="checkCategorySuggestion()" /></label>
+      <div id="cat_suggestion"></div>
       <label class="field">Ar ši išlaida būtina?
         <div class="toggle-row">
           <button type="button" class="toggle-btn ${!exp||exp.necessity==='reikalinga'?'active':''}" id="btn_need" onclick="setNecessity('reikalinga')">Reikalinga</button>
@@ -2752,14 +2780,18 @@ function portfolioTrendSVG() {
   if (points.length < 2) {
     return `<div style="font-size:12px;color:var(--faint);padding:20px 0;text-align:center;">Grafikas atsiras, kai turėsi bent 2 mėnesių įrašus. Portfelio vertė registruojama automatiškai kas mėnesį nuo šiol.</div>`;
   }
-  const values = points.map(p => (p.portfolio||0) + (p.crypto||0));
-  const minVal = Math.min(0, ...values), maxVal = Math.max(1, ...values);
+  const stockVals = points.map(p => p.portfolio||0);
+  const cryptoVals = points.map(p => p.crypto||0);
+  const values = points.map((p,i) => stockVals[i] + cryptoVals[i]);
+  const hasCrypto = cryptoVals.some(v => v > 0);
+  const minVal = Math.min(0, ...stockVals, ...cryptoVals), maxVal = Math.max(1, ...stockVals, ...cryptoVals);
   const range = maxVal - minVal || 1;
   const w = 320, h = 140, padL = 44, padR = 10, padT = 12, padB = 20;
   const plotW = w - padL - padR, plotH = h - padT - padB;
   function xAt(i) { return padL + (i / (points.length - 1)) * plotW; }
   function yAt(v) { return padT + plotH - ((v - minVal) / range) * plotH; }
-  const pathPts = values.map((v,i) => `${xAt(i).toFixed(1)},${yAt(v).toFixed(1)}`).join(" ");
+  const stockPathPts = stockVals.map((v,i) => `${xAt(i).toFixed(1)},${yAt(v).toFixed(1)}`).join(" ");
+  const cryptoPathPts = cryptoVals.map((v,i) => `${xAt(i).toFixed(1)},${yAt(v).toFixed(1)}`).join(" ");
   const zeroY = yAt(0);
   const labels = points.map((p,i) => {
     if (points.length > 6 && i % 2 !== 0) return "";
@@ -2769,12 +2801,13 @@ function portfolioTrendSVG() {
   const first = values[0], last = values[values.length-1];
   const changePct = first !== 0 ? ((last-first)/Math.abs(first))*100 : (last>0?100:0);
   return `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
-    <span style="font-size:11px;color:var(--faint);">Paskutiniai ${points.length} mėn.</span>
+    <span style="font-size:11px;color:var(--faint);">Paskutiniai ${points.length} mėn. ${hasCrypto ? `· <span style="color:#7C5CFC;">● Akcijos</span> <span style="color:var(--blue);">● Kripto</span>` : ""}</span>
     <span class="tape" style="font-size:13px;color:${changePct>=0?'var(--green)':'var(--rust)'};">${changePct>=0?'+':''}${fmt(changePct)}%</span>
   </div>
   <svg viewBox="0 0 ${w} ${h}" style="width:100%;height:150px;display:block;">
     <line x1="${padL}" y1="${zeroY.toFixed(1)}" x2="${w-padR}" y2="${zeroY.toFixed(1)}" stroke="rgba(237,234,224,0.15)" stroke-width="1"/>
-    <polyline points="${pathPts}" fill="none" stroke="#7C5CFC" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    <polyline points="${stockPathPts}" fill="none" stroke="#7C5CFC" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    ${hasCrypto ? `<polyline points="${cryptoPathPts}" fill="none" stroke="#6FA3BF" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="4 3"/>` : ""}
     ${labels}
     <text x="${padL-6}" y="${padT+4}" fill="#8FA098" font-size="8" text-anchor="end">€${Math.round(maxVal)}</text>
   </svg>`;
@@ -3925,7 +3958,7 @@ function renderSettings() {
     </div>
     <div class="field-row">
       <span class="field-row-label">Programėlės užraktas (PIN)</span>
-      <button type="button" onclick="${state.appPin ? 'disableAppPin()' : 'promptSetPin()'}" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid ${state.appPin?'var(--green)':'rgba(237,234,224,0.15)'};background:${state.appPin?'rgba(111,191,115,0.12)':'transparent'};color:${state.appPin?'var(--green)':'var(--faint)'};">${state.appPin ? 'Įjungtas ✓' : 'Nustatyti'}</button>
+      <button type="button" onclick="${state.appPin ? 'state.showPinDisableModal=true;render();' : 'state.showPinSetupModal=true;state.pinSetupError=null;render();'}" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid ${state.appPin?'var(--green)':'rgba(237,234,224,0.15)'};background:${state.appPin?'rgba(111,191,115,0.12)':'transparent'};color:${state.appPin?'var(--green)':'var(--faint)'};">${state.appPin ? 'Įjungtas ✓' : 'Nustatyti'}</button>
     </div>
     <div class="field-row">
       <span class="field-row-label">Priminimai neįrašius kelias dienas</span>
@@ -4032,8 +4065,9 @@ function renderSettings() {
     </div>
 
     <div class="section-label" style="margin-top:22px;">Paskyra</div>
-    <button type="button" onclick="atsijungti()" style="width:100%;padding:12px;border-radius:8px;border:1px solid rgba(217,119,66,0.4);background:transparent;color:var(--red, #D97742);font-size:14px;">Atsijungti</button>
+    <button type="button" onclick="atsijungti()" style="display:block;width:100%;padding:12px;border-radius:8px;border:1px solid rgba(217,119,66,0.4);background:transparent;color:var(--red, #D97742);font-size:14px;cursor:pointer;">Atsijungti</button>
   </div>
+  ${renderPinModals()}
   </div>`;
 }
 async function loadFamilyInfo() {
@@ -4293,18 +4327,51 @@ function renderFamily() {
   </div>`;
 }
 
-function promptSetPin() {
-  const pin = prompt("Sugalvok 4 skaitmenų PIN kodą programėlei atrakinti:");
-  if (!pin) return;
-  if (!/^\d{4}$/.test(pin)) { alert("PIN turi būti iš tiksliai 4 skaitmenų."); return; }
+function confirmPinSetup() {
+  const el = document.getElementById("pin_setup_input");
+  const pin = el ? el.value.trim() : "";
+  if (!/^\d{4}$/.test(pin)) { state.pinSetupError = "PIN turi būti iš tiksliai 4 skaitmenų."; render(); return; }
   state.appPin = pin;
+  state.showPinSetupModal = false;
+  state.pinSetupError = null;
   persistAll(); render();
   showToast("PIN kodas nustatytas");
 }
-function disableAppPin() {
-  if (!confirm("Išjungti programėlės užraktą?")) return;
+function cancelPinSetup() { state.showPinSetupModal = false; state.pinSetupError = null; render(); }
+function confirmPinDisable() {
   state.appPin = null;
+  state.showPinDisableModal = false;
   persistAll(); render();
+  showToast("PIN užraktas išjungtas");
+}
+function cancelPinDisable() { state.showPinDisableModal = false; render(); }
+function renderPinModals() {
+  if (state.showPinSetupModal) {
+    return `<div class="rv-theme" style="position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:60;display:flex;align-items:center;justify-content:center;padding:20px;" onclick="if(event.target===this)cancelPinSetup();">
+      <div style="background:var(--rv-surface);border:1px solid var(--rv-line);border-radius:16px;padding:24px;max-width:300px;width:100%;text-align:center;">
+        <div style="font-weight:600;font-size:16px;margin-bottom:6px;">Nustatyti PIN kodą</div>
+        <div style="font-size:12.5px;color:var(--rv-faint);margin-bottom:16px;">Sugalvok 4 skaitmenų kodą programėlei atrakinti.</div>
+        <input id="pin_setup_input" type="password" inputmode="numeric" maxlength="4" placeholder="••••" autofocus style="text-align:center;font-size:20px;letter-spacing:8px;width:100%;" />
+        ${state.pinSetupError ? `<div style="color:var(--rust);font-size:12.5px;margin-top:8px;">${state.pinSetupError}</div>` : ""}
+        <div style="display:flex;gap:8px;margin-top:16px;">
+          <button type="button" class="submit-btn" style="flex:1;width:auto;" onclick="confirmPinSetup()">Nustatyti</button>
+          <button type="button" class="submit-btn" style="flex:1;width:auto;background:var(--surface-light);color:var(--paper);" onclick="cancelPinSetup()">Atšaukti</button>
+        </div>
+      </div>
+    </div>`;
+  }
+  if (state.showPinDisableModal) {
+    return `<div class="rv-theme" style="position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:60;display:flex;align-items:center;justify-content:center;padding:20px;" onclick="if(event.target===this)cancelPinDisable();">
+      <div style="background:var(--rv-surface);border:1px solid var(--rv-line);border-radius:16px;padding:24px;max-width:300px;width:100%;text-align:center;">
+        <div style="font-weight:600;font-size:16px;margin-bottom:16px;">Išjungti PIN užraktą?</div>
+        <div style="display:flex;gap:8px;">
+          <button type="button" class="submit-btn" style="flex:1;width:auto;background:var(--rust);" onclick="confirmPinDisable()">Išjungti</button>
+          <button type="button" class="submit-btn" style="flex:1;width:auto;background:var(--surface-light);color:var(--paper);" onclick="cancelPinDisable()">Atšaukti</button>
+        </div>
+      </div>
+    </div>`;
+  }
+  return "";
 }
 function submitAddRecurring(ev) {
   ev.preventDefault();
@@ -4794,19 +4861,54 @@ function renderLockScreen() {
   const locked = state.pinLockedUntil && state.pinLockedUntil > now;
   const err = state.pinError ? `<div style="color:var(--rust);font-size:13px;margin-top:10px;">${state.pinError}</div>` : "";
   const secsLeft = locked ? Math.ceil((state.pinLockedUntil - now) / 1000) : 0;
-  return `<div style="min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;text-align:center;">
+  return `<div class="rv-theme" style="min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;text-align:center;">
     <div style="color:var(--gold);margin-bottom:16px;">${ICONS.lock}</div>
     <div class="display" style="font-size:18px;font-weight:600;margin-bottom:16px;">Programėlė užrakinta</div>
     ${locked ? `
       <div style="color:var(--rust);font-size:14px;">Per daug bandymų. Palauk ${secsLeft} sek.</div>
+    ` : state.showPinRecovery ? `
+      <div style="width:100%;max-width:260px;">
+        <div style="font-size:13px;color:var(--faint);margin-bottom:12px;">Įvesk savo paskyros slaptažodį (tą patį, kuriuo prisijungi), kad išjungtum PIN užraktą.</div>
+        <input id="pin_recovery_password" type="password" placeholder="Paskyros slaptažodis" style="text-align:center;" />
+        <button type="button" class="submit-btn" style="margin-top:12px;" onclick="recoverFromForgottenPin()">Išjungti PIN</button>
+        <button type="button" class="icon-btn" style="margin-top:10px;color:var(--faint);font-size:13px;" onclick="state.showPinRecovery=false;state.pinRecoveryError=null;render();">Atšaukti</button>
+        ${state.pinRecoveryError ? `<div style="color:var(--rust);font-size:13px;margin-top:10px;">${state.pinRecoveryError}</div>` : ""}
+      </div>
     ` : `
       <form onsubmit="return submitPin(event)" style="width:100%;max-width:220px;">
         <input id="pin_input" type="password" inputmode="numeric" maxlength="4" placeholder="••••" autofocus style="text-align:center;font-size:22px;letter-spacing:8px;" />
         <button type="submit" class="submit-btn" style="margin-top:14px;">Atrakinti</button>
       </form>
       ${err}
+      <button type="button" class="icon-btn" style="margin-top:16px;color:var(--faint);font-size:13px;text-decoration:underline;" onclick="state.showPinRecovery=true;render();">Pamiršai PIN?</button>
     `}
+  </div>
   </div>`;
+}
+async function recoverFromForgottenPin() {
+  const pwEl = document.getElementById("pin_recovery_password");
+  const password = pwEl ? pwEl.value : "";
+  if (!password) { state.pinRecoveryError = "Įvesk slaptažodį."; render(); return; }
+  if (!manoVartotojas || !manoVartotojas.email) { state.pinRecoveryError = "Nepavyko patvirtinti tapatybės — pabandyk perkrauti puslapį ir prisijungti iš naujo."; render(); return; }
+  try {
+    const res = await fetch(`${AUTH_API_BASE}/api/login`, {
+      method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: manoVartotojas.email, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) { state.pinRecoveryError = data.klaida || "Neteisingas slaptažodis."; render(); return; }
+    state.appPin = null;
+    state.appLocked = false;
+    state.showPinRecovery = false;
+    state.pinRecoveryError = null;
+    state.pinAttempts = 0;
+    persistAll(); render();
+    showToast("PIN užraktas išjungtas");
+  } catch (_) {
+    state.pinRecoveryError = "Nepavyko susisiekti su serveriu.";
+    render();
+  }
 }
 let pinLockTimer = null;
 function submitPin(ev) {
